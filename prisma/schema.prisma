@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  KASIR
+}
+
+model User {
+  id           String        @id @default(cuid())
+  username     String        @unique
+  name         String
+  password     String
+  role         Role          @default(KASIR)
+  active       Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  transactions Transaction[]
+}
+
+model MenuItem {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  category      String         @default("LAINNYA")
+  price         Int            @default(0)
+  cost          Int            @default(0) // modal (opsional, untuk hitung untung)
+  active        Boolean        @default(true)
+  sortOrder     Int            @default(0)
+  stocks        MenuStock[] // bahan/kemasan yang dipakai (bisa lebih dari satu)
+  variantGroups VariantGroup[]
+  updatedAt     DateTime       @updatedAt
+
+  @@index([category])
+}
+
+// Grup pilihan menu, mis. "Suhu" (Panas/Dingin) atau "Extra" (Double shot).
+model VariantGroup {
+  id         String          @id @default(cuid())
+  menuItem   MenuItem        @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  menuItemId String
+  name       String
+  type       String          @default("SINGLE") // SINGLE (pilih satu) | MULTI (boleh banyak)
+  required   Boolean         @default(false)
+  sortOrder  Int             @default(0)
+  options    VariantOption[]
+}
+
+model VariantOption {
+  id         String               @id @default(cuid())
+  group      VariantGroup         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId    String
+  name       String
+  priceDelta Int                  @default(0) // tambahan harga (mis. Double shot +5000)
+  sortOrder  Int                  @default(0)
+  stocks     VariantOptionStock[] // bahan/kemasan khusus opsi ini (mis. Dingin → cup plastik)
+}
+
+// Bahan/kemasan yang dipotong ketika sebuah opsi varian dipilih.
+model VariantOptionStock {
+  id          String        @id @default(cuid())
+  option      VariantOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  optionId    String
+  packaging   Packaging     @relation(fields: [packagingId], references: [id], onDelete: Cascade)
+  packagingId String
+  qty         Int           @default(1)
+
+  @@unique([optionId, packagingId])
+}
+
+// Bahan/stok yang dihitung: kemasan (cup, wadah) ATAU bahan (mie, dll).
+model Packaging {
+  id         String          @id @default(cuid())
+  name       String          @unique
+  unit       String          @default("pcs")
+  stock      Int             @default(0)
+  minStock     Int                  @default(0)
+  updatedAt    DateTime             @updatedAt
+  menuStocks   MenuStock[]
+  optionStocks VariantOptionStock[]
+  movements    StockMovement[]
+}
+
+// Satu bahan yang dipakai sebuah menu, dengan qty per porsi. (Mie = Mie×1 + Wadah×1)
+model MenuStock {
+  id          String    @id @default(cuid())
+  menuItem    MenuItem  @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  menuItemId  String
+  packaging   Packaging @relation(fields: [packagingId], references: [id], onDelete: Cascade)
+  packagingId String
+  qty         Int       @default(1)
+
+  @@unique([menuItemId, packagingId])
+}
+
+model StockMovement {
+  id          String    @id @default(cuid())
+  packaging   Packaging @relation(fields: [packagingId], references: [id], onDelete: Cascade)
+  packagingId String
+  type          String // SALE | RESTOCK | IMPORT | ADJUST | VOID
+  delta         Int
+  before        Int
+  after         Int
+  note          String?
+  userName      String?
+  transactionId String? // untuk pembatalan/void
+  createdAt     DateTime @default(now())
+
+  @@index([packagingId])
+  @@index([createdAt])
+  @@index([transactionId])
+}
+
+model Transaction {
+  id           String            @id @default(cuid())
+  code         String            @unique
+  cashier      User              @relation(fields: [cashierId], references: [id])
+  cashierId    String
+  cashierName  String
+  items        TransactionItem[]
+  grossTotal   Int               @default(0) // sebelum diskon
+  discount     Int               @default(0)
+  voucherName  String?
+  voucherId    String? // untuk kembalikan kuota saat void
+  total        Int // setelah diskon (yang dibayar)
+  costTotal    Int               @default(0)
+  paid         Int
+  change       Int               @default(0)
+  payment      String            @default("TUNAI")
+  orderType    String            @default("DINEIN") // DINEIN | TAKEAWAY
+  note         String?
+  businessDate String
+  status       String            @default("ACTIVE") // ACTIVE | VOID
+  voidedAt     DateTime?
+  voidedBy     String?
+  voidReason   String?
+  createdAt    DateTime          @default(now())
+
+  @@index([businessDate])
+  @@index([createdAt])
+  @@index([cashierId])
+}
+
+model TransactionItem {
+  id            String      @id @default(cuid())
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  transactionId String
+  name          String
+  category      String?
+  price         Int // harga satuan termasuk tambahan varian
+  cost          Int         @default(0)
+  qty           Int
+  subtotal      Int
+  variants      String? // nama varian terpilih, mis. "Dingin, Double shot"
+  note          String? // catatan per item (mis. "less sugar")
+}
+
+// Karyawan (lepas dari akun login — 3 orang bisa gantian pakai 1 akun kasir).
+model Employee {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  attendances Attendance[]
+}
+
+model Attendance {
+  id           String    @id @default(cuid())
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId   String
+  employeeName String
+  businessDate String
+  shift        String? // Sore | Malam | ...
+  clockIn      DateTime  @default(now())
+  clockOut     DateTime?
+  recordedBy   String? // akun login yang mencatat
+  note         String?
+
+  @@index([businessDate])
+  @@index([employeeId])
+}
+
+// Catatan keuangan / buku kas (pengeluaran beli barang, pemasukan manual).
+model CashEntry {
+  id           String   @id @default(cuid())
+  type         String // MASUK | KELUAR
+  amount       Int
+  category     String   @default("LAINNYA")
+  note         String?
+  businessDate String
+  userName     String?
+  createdAt    DateTime @default(now())
+
+  @@index([businessDate])
+  @@index([createdAt])
+}
+
+model Voucher {
+  id         String    @id @default(cuid())
+  name       String    @unique
+  type       String // PERCENT | NOMINAL
+  value      Int // persen (0-100) atau rupiah
+  active     Boolean   @default(true)
+  maxUses    Int? // null = tak terbatas
+  usedCount  Int       @default(0)
+  validFrom  DateTime? // null = tak dibatasi
+  validUntil DateTime? // null = tak dibatasi (disimpan akhir hari)
+  createdAt  DateTime  @default(now())
+}
+
+model Setting {
+  key   String @id
+  value String
+}

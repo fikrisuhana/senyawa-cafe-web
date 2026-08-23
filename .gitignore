@@ -1,0 +1,11 @@
+node_modules
+.next
+.env
+*.log
+.DS_Store
+
+# Database backups (JANGAN di-commit)
+backups/
+*.sql
+*.sql.gz
+*.dump

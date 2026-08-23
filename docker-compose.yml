@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: poscafe
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-poscafe_secret}"
+      POSTGRES_DB: poscafe
+      TZ: Asia/Jakarta
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poscafe -d poscafe"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql://poscafe:${POSTGRES_PASSWORD:-poscafe_secret}@db:5432/poscafe?schema=public"
+      # WAJIB diisi di .env untuk deploy publik (rahasia acak panjang).
+      JWT_SECRET: "${JWT_SECRET:-DEV-ONLY-ganti-di-.env}"
+      # Set 1 kalau di belakang HTTPS (mis. Nginx Proxy Manager).
+      COOKIE_SECURE: "${COOKIE_SECURE:-0}"
+      # Password awal admin/kasir (dipakai hanya saat seed instalasi baru).
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-}"
+      KASIR_PASSWORD: "${KASIR_PASSWORD:-}"
+      NODE_ENV: production
+      TZ: Asia/Jakarta
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # host:container — ubah 3080 kalau bentrok
+      - "3080:3000"
+
+volumes:
+  dbdata:

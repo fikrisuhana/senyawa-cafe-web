@@ -17,8 +17,14 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = req.cookies.get(SESSION_COOKIE)?.value;
+  // Auth dari cookie (web) ATAU header Authorization: Bearer <token> (aplikasi HP).
+  const cookieTok = req.cookies.get(SESSION_COOKIE)?.value;
+  const authz = req.headers.get("authorization") || "";
+  const bearerTok = authz.toLowerCase().startsWith("bearer ") ? authz.slice(7).trim() : null;
+  const token = bearerTok || cookieTok;
   const user = token ? await verifyToken(token) : null;
+
+  const isApi = pathname.startsWith("/api/");
 
   if (PUBLIC.includes(pathname)) {
     if (user) return NextResponse.redirect(new URL("/kasir", req.url));
@@ -26,8 +32,9 @@ export async function middleware(req: NextRequest) {
   }
 
   if (!user) {
-    const url = new URL("/login", req.url);
-    return NextResponse.redirect(url);
+    // API → 401 JSON (jangan redirect HTML ke /login, biar HP terbaca bener).
+    if (isApi) return NextResponse.json({ error: "Belum login" }, { status: 401 });
+    return NextResponse.redirect(new URL("/login", req.url));
   }
 
   // Halaman & API admin hanya untuk ADMIN.
@@ -35,7 +42,7 @@ export async function middleware(req: NextRequest) {
     (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) &&
     user.role !== "ADMIN"
   ) {
-    if (pathname.startsWith("/api/"))
+    if (isApi)
       return NextResponse.json({ error: "Khusus admin" }, { status: 403 });
     return NextResponse.redirect(new URL("/kasir", req.url));
   }

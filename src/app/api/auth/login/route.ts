@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
-import { createSession } from "@/lib/auth";
+import { createSession, createToken } from "@/lib/auth";
 
 // Rate limit sederhana per (IP+username) — tahan brute force di deploy publik.
 // In-memory per instance; cukup untuk 1 container. Untuk skala besar pakai Redis.
@@ -50,11 +50,13 @@ export async function POST(req: Request) {
   if (!ok) return NextResponse.json({ error: GENERIC }, { status: 401 });
 
   resetTry(key);
-  await createSession({
+  const sess = {
     id: user.id,
     username: user.username,
     name: user.name,
     role: user.role,
-  });
-  return NextResponse.json({ ok: true, role: user.role });
+  };
+  await createSession(sess); // set cookie (web)
+  const token = await createToken(sess); // token untuk aplikasi HP (Bearer)
+  return NextResponse.json({ ok: true, role: user.role, token, user: sess });
 }

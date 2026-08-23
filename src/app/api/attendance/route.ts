@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { getAuthFromRequest } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { businessDateKey } from "@/lib/bizday";
 
 // Presence-only: klik shift = tandai masuk. Klik lagi = batal. Tanpa jam pulang.
 export async function POST(req: Request) {
-  const user = await getSession();
+  const user = await getAuthFromRequest(req);
   if (!user) return NextResponse.json({ error: "Belum login" }, { status: 401 });
 
   const { employeeId, shift } = await req.json().catch(() => ({}));

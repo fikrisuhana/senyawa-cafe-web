@@ -118,6 +118,7 @@ model StockMovement {
 model Transaction {
   id           String            @id @default(cuid())
   code         String            @unique
+  clientId     String?           @unique // UUID dari aplikasi HP → anti-dobel saat sinkron
   cashier      User              @relation(fields: [cashierId], references: [id])
   cashierId    String
   cashierName  String

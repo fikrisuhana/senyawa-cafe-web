@@ -12,12 +12,17 @@ export type SessionUser = {
   role: "ADMIN" | "KASIR";
 };
 
-export async function createSession(user: SessionUser) {
-  const token = await new SignJWT({ ...user })
+/** Buat token JWT (dipakai cookie web MAUPUN Bearer token aplikasi HP). */
+export async function createToken(user: SessionUser): Promise<string> {
+  return await new SignJWT({ ...user })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("365d")
     .sign(secret());
+}
+
+export async function createSession(user: SessionUser) {
+  const token = await createToken(user);
   const jar = await cookies();
   jar.set(COOKIE, token, {
     httpOnly: true,
@@ -70,3 +75,16 @@ export async function verifyToken(token: string): Promise<SessionUser | null> {
 }
 
 export const SESSION_COOKIE = COOKIE;
+
+/**
+ * Ambil user dari request: `Authorization: Bearer <token>` (aplikasi HP) atau
+ * cookie sesi (web). Dipakai di route yang perlu jalan dari HP maupun browser.
+ */
+export async function getAuthFromRequest(req: Request): Promise<SessionUser | null> {
+  const h = req.headers.get("authorization");
+  if (h && h.toLowerCase().startsWith("bearer ")) {
+    const u = await verifyToken(h.slice(7).trim());
+    if (u) return u;
+  }
+  return getSession();
+}

@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { getAuthFromRequest } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { businessDateKey } from "@/lib/bizday";
 
 type InItem = { id: string; qty: number; optionIds?: string[]; note?: string };
 
 export async function POST(req: Request) {
-  const user = await getSession();
+  const user = await getAuthFromRequest(req);
   if (!user) return NextResponse.json({ error: "Belum login" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
@@ -18,9 +18,17 @@ export async function POST(req: Request) {
   const note = body.note ? String(body.note) : null;
   const voucherId: string | null = body.voucherId || null;
   const manualDiscount = Math.max(0, Math.round(Number(body.manualDiscount) || 0));
+  // UUID dari aplikasi HP → anti-dobel saat sinkron ulang (idempotent).
+  const clientId: string | null = body.clientId ? String(body.clientId) : null;
 
   if (items.length === 0)
     return NextResponse.json({ error: "Keranjang kosong" }, { status: 400 });
+
+  // Idempotency: kalau transaksi dgn clientId ini sudah pernah masuk, balikin yang lama.
+  if (clientId) {
+    const dup = await prisma.transaction.findUnique({ where: { clientId } });
+    if (dup) return NextResponse.json({ ok: true, id: dup.id, code: dup.code, duplicate: true });
+  }
 
   const settings = await getSettings();
   const now = new Date();
@@ -112,6 +120,7 @@ export async function POST(req: Request) {
       const trx = await tx.transaction.create({
         data: {
           code,
+          clientId,
           cashierId: user.id,
           cashierName: user.name,
           grossTotal: gross,

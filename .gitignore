@@ -9,3 +9,6 @@ backups/
 *.sql
 *.sql.gz
 *.dump
+
+# TS build cache
+*.tsbuildinfo

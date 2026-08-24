@@ -138,7 +138,7 @@ async function _writeHeaderAndDashboard(id: string) {
   const hari = (off: number) => `TEXT(${D}-${off},"yyyy-mm-dd")`;
   const hariIni = hari(0);
   const bulanTerpilih = `TEXT(${D},"yyyy-mm")&"*"`;
-  const sum = (col: string, ...cond: string[]) => `SUMIFS(Transaksi!${col}:${col},${cond.join(",")})`;
+  const sum = (col: string, ...cond: string[]) => `SUMIFS(Transaksi!${col},${cond.join(",")})`;
   const aktif = `Transaksi!L:L,"ACTIVE"`;
   const rows: (string | number)[][] = [
     ["📊 RUANG SENYAWA — LAPORAN POS", ""],

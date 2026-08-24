@@ -143,8 +143,8 @@ async function _writeHeaderAndDashboard(id: string) {
   const aktif = `Transaksi!L:L,"ACTIVE"`;
   const bulanAkhir = `TEXT($H$2,"yyyy-mm")&"*"`;
   const rows: (string | number)[][] = [
-    ["📊 RUANG SENYAWA — LAPORAN POS", "", "", "", "(mulai)", "", "", `=${startD}`],
-    ["Pilih PERIODE di B4 (dropdown). Kalau \"Tanggal tertentu\", isi tanggalnya di B5. Selain B4/B5, jangan diedit.", "", "", "", "(sampai)", "", "", `=${endD}`],
+    ["📊 RUANG SENYAWA — LAPORAN POS", "", "", "", "(mulai)", "", "", `=${startD}`, "(pilih tgl)"],
+    ["Pilih PERIODE di B4 (dropdown). Kalau \"Tanggal tertentu\", pilih tanggalnya di B5. Selain B4/B5, jangan diedit.", "", "", "", "(sampai)", "", "", `=${endD}`, '=IFERROR(SORT(UNIQUE(FILTER(Transaksi!B2:B,Transaksi!B2:B<>""))),"")'],
     ["", ""],
     ["📅 Periode laporan", "Hari ini"],
     ["   atau pilih tanggal (utk \"Tanggal tertentu\")", ""],
@@ -209,6 +209,17 @@ async function _writeHeaderAndDashboard(id: string) {
                   "Tanggal tertentu",
                 ].map((v) => ({ userEnteredValue: v })),
               },
+              showCustomUi: true,
+              strict: true,
+            },
+          },
+        },
+        {
+          // B5 = dropdown tanggal (daftar hari-usaha yang ADA transaksinya, dari kolom J).
+          setDataValidation: {
+            range: { sheetId: dashId, startRowIndex: 4, endRowIndex: 5, startColumnIndex: 1, endColumnIndex: 2 },
+            rule: {
+              condition: { type: "ONE_OF_RANGE", values: [{ userEnteredValue: "=Dashboard!J2:J" }] },
               showCustomUi: true,
               strict: true,
             },

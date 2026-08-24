@@ -33,6 +33,23 @@ export default function EmployeeManager({ rows }: { rows: EmpRow[] }) {
     router.refresh();
   }
 
+  async function rename(r: EmpRow) {
+    const input = prompt(`Ganti nama karyawan "${r.name}" menjadi:`, r.name);
+    const newName = input?.trim();
+    if (!newName || newName === r.name) return;
+    const res = await fetch("/api/admin/employees", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: r.id, name: newName }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert(j.error || "Gagal mengganti nama");
+      return;
+    }
+    router.refresh();
+  }
+
   async function del(r: EmpRow) {
     if (!confirm(`Hapus karyawan "${r.name}"?`)) return;
     const res = await fetch(`/api/admin/employees?id=${r.id}`, { method: "DELETE" });
@@ -71,6 +88,9 @@ export default function EmployeeManager({ rows }: { rows: EmpRow[] }) {
               }`}
             >
               {r.active ? "Aktif" : "Nonaktif"}
+            </button>
+            <button onClick={() => rename(r)} className="text-xs text-brand-600 hover:underline">
+              Edit
             </button>
             <button onClick={() => del(r)} className="text-xs text-red-600 hover:underline">
               Hapus

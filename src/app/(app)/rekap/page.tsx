@@ -76,6 +76,20 @@ export default async function RekapPage({
     }
   }
 
+  // Rincian item per kategori (drill-down: klik kategori → item terlaris + pcs).
+  const perKategoriItems = new Map<string, Map<string, { qty: number; total: number }>>();
+  for (const t of active) {
+    for (const it of t.items) {
+      const cat = it.category || "LAINNYA";
+      let items = perKategoriItems.get(cat);
+      if (!items) perKategoriItems.set(cat, (items = new Map()));
+      const cur = items.get(it.name) || { qty: 0, total: 0 };
+      cur.qty += it.qty;
+      cur.total += it.subtotal;
+      items.set(it.name, cur);
+    }
+  }
+
   // Pagination tabel (admin). Kasir hari itu saja → tak dipaginasi.
   const page = Math.max(1, Number(sp.page) || 1);
   const totalPages = isAdmin ? Math.max(1, Math.ceil(all.length / PAGE_SIZE)) : 1;
@@ -124,10 +138,35 @@ export default async function RekapPage({
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Panel title="Per kategori">
-          {[...perKategori.entries()].map(([k, v]) => (
-            <Line key={k} k={`${k} (${v.qty})`} v={rupiah(v.total)} />
-          ))}
+        <Panel title="Per kategori (klik utk rincian)">
+          {[...perKategori.entries()]
+            .sort((a, b) => b[1].total - a[1].total)
+            .map(([k, v]) => {
+              const items = [...(perKategoriItems.get(k) || new Map())].sort(
+                (a, b) => b[1].qty - a[1].qty
+              );
+              return (
+                <details key={k} className="group border-b border-slate-100 last:border-0">
+                  <summary className="-mx-1 flex cursor-pointer list-none items-center justify-between rounded px-1 py-1 text-sm hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+                    <span className="font-medium">
+                      <span className="mr-1 inline-block text-slate-400 transition group-open:rotate-90">▸</span>
+                      {k} <span className="text-slate-400">({v.qty})</span>
+                    </span>
+                    <span className="font-medium">{rupiah(v.total)}</span>
+                  </summary>
+                  <div className="mt-1 space-y-1 border-l-2 border-brand-200 pb-2 pl-3">
+                    {items.map(([name, d]) => (
+                      <div key={name} className="flex items-center justify-between text-xs">
+                        <span className="text-slate-600">{name}</span>
+                        <span className="tabular-nums text-slate-500">
+                          <span className="font-semibold text-brand-700">{d.qty} pcs</span> · {rupiah(d.total)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              );
+            })}
         </Panel>
         <Panel title="Per metode bayar">
           {[...perMetode.entries()].map(([k, v]) => (

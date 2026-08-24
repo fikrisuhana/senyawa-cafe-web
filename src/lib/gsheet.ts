@@ -259,7 +259,100 @@ async function _dashboardSheetId(id: string, sheets: any): Promise<number> {
   return s?.properties?.sheetId ?? 0;
 }
 
-/** Tandai baris transaksi di Sheet sebagai VOID (cari baris berdasarkan kode). */
+/**
+ * Tab JADWAL SHIFT (matriks tanggal × shift, diisi manual owner di Sheet).
+ * Server HANYA menyiapkan struktur: header shift (dari Setting web), kolom
+ * tanggal otomatis mengikuti bulan terpilih (dropdown B1), dan dropdown bulan.
+ * Sel isian nama TIDAK PERNAH ditimpa — tab ini bukan mirror, ini milik owner.
+ */
+export async function ensureJadwalTab(): Promise<void> {
+  try {
+    if (!sheetEnabled()) return;
+    const id = await getOrCreateSheet();
+    if (!id) return;
+    const auth = jwt();
+    if (!auth) return;
+    const sheets = google.sheets({ version: "v4", auth });
+
+    // Buat tab kalau belum ada, lalu ambil meta TERBARU (untuk sheetId valid).
+    let meta = await sheets.spreadsheets.get({ spreadsheetId: id });
+    if (!(meta.data.sheets || []).some((s) => s.properties?.title === "Jadwal")) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: id,
+        requestBody: { requests: [{ addSheet: { properties: { title: "Jadwal" } } }] },
+      });
+      meta = await sheets.spreadsheets.get({ spreadsheetId: id });
+    }
+
+    // Header shift dari Setting web (default Pagi,Malam — sama dgn absen).
+    const shifts = ((await getSetting("shifts")) || "Pagi,Malam")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const header = ["Tanggal", ...shifts];
+
+    // Kolom tanggal: formula per baris (mengikuti bulan di B1). Baris 4..34 = tgl 1..31.
+    const dateRows = Array.from({ length: 31 }, (_, i) => {
+      const day = i + 1;
+      return [
+        `=IF($B$1="","",IF(MONTH(DATE(YEAR(DATEVALUE($B$1&"-01")),MONTH(DATEVALUE($B$1&"-01")),${day}))<>MONTH(DATEVALUE($B$1&"-01")),"",TEXT(DATE(YEAR(DATEVALUE($B$1&"-01")),MONTH(DATEVALUE($B$1&"-01")),${day}),"dd/mm")))`,
+        ...shifts.map(() => ""),
+      ];
+    });
+
+    // Jangan timpa pilihan bulan owner: cek B1 dulu.
+    const cur = await sheets.spreadsheets.values.get({ spreadsheetId: id, range: "Jadwal!B1" });
+    const b1 = (cur.data.values?.[0]?.[0] ?? "").toString();
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: id,
+      range: "Jadwal!A1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [
+          ["📅 JADWAL SHIFT", b1 || '=TEXT(TODAY(),"yyyy-mm")', "", "", "", "", "", "", "", "", "", "Pilihan bulan →"],
+          ["Pilih bulan di B1 (dropdown). Isi nama karyawan per tanggal × shift — kolom isian ini TIDAK ditimpa server. Tanggal otomatis mengikuti bulan.", ""],
+          header,
+          ...dateRows,
+        ],
+      },
+    });
+
+    // Helper daftar bulan (2 bln lalu s/d 12 bln depan) + dropdown B1 darinya.
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: id,
+      range: "Jadwal!M1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [
+          ['=ARRAYFORMULA(TEXT(EDATE(EOMONTH(TODAY(),-2)+1,SEQUENCE(1,15)),"yyyy-mm"))'],
+        ],
+      },
+    });
+
+    const jadwalSheet = (meta.data.sheets || []).find((s) => s.properties?.title === "Jadwal");
+    if (!jadwalSheet) return;
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: id,
+      requestBody: {
+        requests: [
+          {
+            setDataValidation: {
+              range: { sheetId: jadwalSheet.properties?.sheetId ?? 0, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 1, endColumnIndex: 2 },
+              rule: {
+                condition: { type: "ONE_OF_RANGE", values: [{ userEnteredValue: "=Jadwal!M1:AA1" }] },
+                showCustomUi: true,
+                strict: true,
+              },
+            },
+          },
+        ],
+      },
+    });
+  } catch (e) {
+    console.error("ensureJadwalTab gagal:", (e as Error).message);
+  }
+}
 export async function markVoidedInSheet(code: string): Promise<void> {
   try {
     if (!sheetEnabled()) return;
@@ -339,6 +432,7 @@ export async function rebuildSheet(): Promise<string | null> {
   await _writeHeaderAndDashboard(id);
   await syncCatalogToSheet();
   await syncOpsToSheet();
+  await ensureJadwalTab(); // struktur jadwal shift (isian owner tak disentuh)
   return id;
 }
 

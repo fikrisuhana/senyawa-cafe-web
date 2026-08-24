@@ -54,40 +54,33 @@ export function sheetUrl(id: string): string {
   return `https://docs.google.com/spreadsheets/d/${id}/edit`;
 }
 
-/** Ambil id sheet dari Setting; kalau belum ada → buat + share ke OWNER_EMAIL + header. */
+/** Pastikan tab Dashboard & Transaksi ada di spreadsheet (owner bikin sheet kosong). */
+async function ensureTabs(id: string) {
+  const auth = jwt();
+  if (!auth) return;
+  const sheets = google.sheets({ version: "v4", auth });
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: id });
+  const titles = (meta.data.sheets || []).map((s) => s.properties?.title || "");
+  const need = ["Dashboard", "Transaksi"].filter((t) => !titles.includes(t));
+  if (need.length) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: id,
+      requestBody: { requests: need.map((t) => ({ addSheet: { properties: { title: t } } })) },
+    });
+  }
+}
+
+/**
+ * Ambil id spreadsheet dari env GSHEET_ID (atau Setting) + pastikan tab-nya ada.
+ * Service account TIDAK membuat file (tak punya kuota Drive) — owner yang bikin sheet
+ * lalu share ke email service account, id-nya dipasang di GSHEET_ID.
+ */
 export async function getOrCreateSheet(): Promise<string | null> {
   const auth = jwt();
   if (!auth) return null;
-  const existing = await getSetting("gsheet_id");
-  if (existing) return existing;
-
-  const sheets = google.sheets({ version: "v4", auth });
-  const created = await sheets.spreadsheets.create({
-    requestBody: {
-      properties: { title: "Ruang Senyawa — Laporan POS", locale: "en_US" },
-      sheets: [{ properties: { title: "Dashboard" } }, { properties: { title: "Transaksi" } }],
-    },
-  });
-  const id = created.data.spreadsheetId || "";
+  const id = (process.env.GSHEET_ID || (await getSetting("gsheet_id")) || "").trim();
   if (!id) return null;
-  await setSetting("gsheet_id", id);
-
-  // Share ke owner (biar muncul di Drive-nya).
-  const owner = process.env.OWNER_EMAIL;
-  if (owner) {
-    try {
-      const drive = google.drive({ version: "v3", auth });
-      await drive.permissions.create({
-        fileId: id,
-        requestBody: { type: "user", role: "writer", emailAddress: owner },
-        sendNotificationEmail: true,
-      });
-    } catch {
-      /* share gagal tak fatal */
-    }
-  }
-
-  await _writeHeaderAndDashboard(id);
+  await ensureTabs(id);
   return id;
 }
 

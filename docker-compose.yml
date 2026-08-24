@@ -27,8 +27,10 @@ services:
       # Password awal admin/kasir (dipakai hanya saat seed instalasi baru).
       ADMIN_PASSWORD: "${ADMIN_PASSWORD:-}"
       KASIR_PASSWORD: "${KASIR_PASSWORD:-}"
-      # Auto-ekspor Google Sheet (service account, base64 JSON) + email owner utk share.
+      # Auto-ekspor Google Sheet (service account). Owner bikin sheet + share ke SA,
+      # id-nya dipasang di GSHEET_ID. OWNER_EMAIL opsional (info).
       GOOGLE_SA_JSON_B64: "${GOOGLE_SA_JSON_B64:-}"
+      GSHEET_ID: "${GSHEET_ID:-}"
       OWNER_EMAIL: "${OWNER_EMAIL:-}"
       NODE_ENV: production
       TZ: Asia/Jakarta

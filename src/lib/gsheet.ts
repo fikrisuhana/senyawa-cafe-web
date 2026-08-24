@@ -220,6 +220,31 @@ async function _dashboardSheetId(id: string, sheets: any): Promise<number> {
   return s?.properties?.sheetId ?? 0;
 }
 
+/** Tandai baris transaksi di Sheet sebagai VOID (cari baris berdasarkan kode). */
+export async function markVoidedInSheet(code: string): Promise<void> {
+  try {
+    if (!sheetEnabled()) return;
+    const id = await getOrCreateSheet();
+    if (!id) return;
+    const auth = jwt();
+    if (!auth) return;
+    const sheets = google.sheets({ version: "v4", auth });
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId: id, range: "'Transaksi'!A2:A" });
+    const rows = res.data.values || [];
+    const idx = rows.findIndex((r) => (r[0] || "") === code);
+    if (idx < 0) return;
+    const rowNum = idx + 2; // +1 header, +1 basis-1
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: id,
+      range: `'Transaksi'!L${rowNum}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [["VOID"]] },
+    });
+  } catch (e) {
+    console.error("markVoidedInSheet gagal:", (e as Error).message);
+  }
+}
+
 /** Tambah 1 transaksi ke tab Transaksi. Fire-and-forget (tak ganggu POST transaksi). */
 export async function appendTransactionToSheet(trxId: string): Promise<void> {
   try {

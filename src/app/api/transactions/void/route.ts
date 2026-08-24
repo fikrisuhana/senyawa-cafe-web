@@ -1,17 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { markVoidedInSheet } from "@/lib/gsheet";
+import { getAuthFromRequest } from "@/lib/auth";
 
 export async function POST(req: Request) {
-  const user = await getSession();
+  const user = await getAuthFromRequest(req);
   if (!user) return NextResponse.json({ error: "Belum login" }, { status: 401 });
 
-  const { id, reason } = await req.json().catch(() => ({}));
-  if (!id) return NextResponse.json({ error: "id transaksi wajib" }, { status: 400 });
+  const { id, clientId, reason } = await req.json().catch(() => ({}));
+  if (!id && !clientId) return NextResponse.json({ error: "id transaksi wajib" }, { status: 400 });
 
   try {
     await prisma.$transaction(async (tx) => {
-      const trx = await tx.transaction.findUnique({ where: { id } });
+      // HP mengirim clientId (id lokalnya) — server cari transaksinya.
+      const trx = id
+        ? await tx.transaction.findUnique({ where: { id } })
+        : await tx.transaction.findUnique({ where: { clientId } });
       if (!trx) throw new Error("Transaksi tidak ditemukan");
       if (trx.status === "VOID") throw new Error("Transaksi sudah dibatalkan");
 
@@ -57,6 +61,10 @@ export async function POST(req: Request) {
         },
       });
     });
+    const voided = id
+      ? await prisma.transaction.findUnique({ where: { id }, select: { code: true } })
+      : await prisma.transaction.findUnique({ where: { clientId }, select: { code: true } });
+    if (voided) void markVoidedInSheet(voided.code);
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Gagal membatalkan" }, { status: 400 });

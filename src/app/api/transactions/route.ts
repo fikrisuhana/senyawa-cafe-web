@@ -123,7 +123,8 @@ export async function POST(req: Request) {
           code,
           clientId,
           cashierId: user.id,
-          cashierName: user.name,
+          // Dari HP: nama karyawan yang dipilih (bar bawah POS), bukan nama akun.
+          cashierName: String(body.cashierName || user.name).slice(0, 60),
           grossTotal: gross,
           discount,
           voucherName,

@@ -20,6 +20,8 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: "postgresql://poscafe:${POSTGRES_PASSWORD:-poscafe_secret}@db:5432/poscafe?schema=public"
+      # WAJIB WIB — kalau UTC, businessDate & laporan "hari ini" mundur sehari (00:00-07:00 WIB).
+      TZ: Asia/Jakarta
       # WAJIB diisi di .env untuk deploy publik (rahasia acak panjang).
       JWT_SECRET: "${JWT_SECRET:-DEV-ONLY-ganti-di-.env}"
       # Set 1 kalau di belakang HTTPS (mis. Nginx Proxy Manager).

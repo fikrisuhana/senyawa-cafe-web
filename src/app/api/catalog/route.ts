@@ -11,7 +11,12 @@ export async function GET(req: Request) {
   const user = await getAuthFromRequest(req);
   if (!user) return NextResponse.json({ error: "Belum login" }, { status: 401 });
 
-  const [menus, vouchers, packaging, employees, settings] = await Promise.all([
+  // Absensi 30 hari terakhir — supaya HP (login ulang / ganti alat) tetap punya data.
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  const since = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  const [menus, vouchers, packaging, employees, settings, attendances] = await Promise.all([
     prisma.menuItem.findMany({
       orderBy: { sortOrder: "asc" },
       include: {
@@ -31,6 +36,7 @@ export async function GET(req: Request) {
     prisma.packaging.findMany({ orderBy: { name: "asc" } }),
     prisma.employee.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     prisma.setting.findMany(),
+    prisma.attendance.findMany({ where: { businessDate: { gte: since } }, orderBy: { clockIn: "asc" } }),
   ]);
 
   return NextResponse.json({
@@ -41,5 +47,10 @@ export async function GET(req: Request) {
     packaging,
     employees,
     settings,
+    attendances: attendances.map((a) => ({
+      employeeName: a.employeeName,
+      businessDate: a.businessDate,
+      shift: a.shift || "",
+    })),
   });
 }

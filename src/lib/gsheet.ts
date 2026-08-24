@@ -113,6 +113,15 @@ async function _writeHeaderAndDashboard(id: string) {
   if (!auth) return;
   const sheets = google.sheets({ version: "v4", auth });
 
+  // Locale EN: rumus di bawah pakai koma pemisah argumen — di locale id (desimal
+  // koma) Google Sheet menolaknya dengan #ERROR!. Set sekali, aman untuk selalu.
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: id,
+    requestBody: {
+      requests: [{ updateSpreadsheetProperties: { properties: { locale: "en_US" }, fields: "locale" } }],
+    },
+  });
+
   // Header Transaksi.
   await sheets.spreadsheets.values.update({
     spreadsheetId: id,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { syncCatalogToSheet } from "@/lib/gsheet";
 
 function norm(b: any) {
   const type = b.type === "NOMINAL" ? "NOMINAL" : "PERCENT";
@@ -51,6 +52,7 @@ export async function PUT(req: Request) {
   if (typeof b.active === "boolean") data.active = b.active;
   Object.assign(data, limits(b));
   await prisma.voucher.update({ where: { id: b.id }, data });
+  void syncCatalogToSheet(); // mirror katalog ke Sheet (fire-and-forget)
   return NextResponse.json({ ok: true });
 }
 
@@ -58,5 +60,6 @@ export async function DELETE(req: Request) {
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id wajib" }, { status: 400 });
   await prisma.voucher.delete({ where: { id } });
+  void syncCatalogToSheet(); // mirror katalog ke Sheet (fire-and-forget)
   return NextResponse.json({ ok: true });
 }

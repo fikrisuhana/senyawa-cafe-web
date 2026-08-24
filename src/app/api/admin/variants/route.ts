@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { syncCatalogToSheet } from "@/lib/gsheet";
 
 // POST {kind:"group", menuItemId, name, type, required} | {kind:"option", groupId, name, priceDelta}
 export async function POST(req: Request) {
@@ -15,6 +16,7 @@ export async function POST(req: Request) {
         required: !!b.required,
       },
     });
+    void syncCatalogToSheet();
     return NextResponse.json({ ok: true, id: g.id });
   }
   if (b.kind === "option") {
@@ -27,6 +29,7 @@ export async function POST(req: Request) {
         priceDelta: Math.round(Number(b.priceDelta) || 0),
       },
     });
+    void syncCatalogToSheet();
     return NextResponse.json({ ok: true, id: o.id });
   }
   if (b.kind === "optionStock") {
@@ -40,6 +43,7 @@ export async function POST(req: Request) {
           qty: Math.max(1, Math.round(Number(b.qty) || 1)),
         },
       });
+      void syncCatalogToSheet();
       return NextResponse.json({ ok: true, id: s.id });
     } catch (e: any) {
       return NextResponse.json(
@@ -61,6 +65,7 @@ export async function PUT(req: Request) {
     if (b.qty !== undefined) data.qty = Math.max(1, Math.round(Number(b.qty) || 1));
     try {
       await prisma.variantOptionStock.update({ where: { id: b.id }, data });
+      void syncCatalogToSheet();
       return NextResponse.json({ ok: true });
     } catch (e: any) {
       return NextResponse.json(
@@ -82,5 +87,6 @@ export async function DELETE(req: Request) {
   else if (kind === "option") await prisma.variantOption.delete({ where: { id } });
   else if (kind === "optionStock") await prisma.variantOptionStock.delete({ where: { id } });
   else return NextResponse.json({ error: "kind tidak dikenal" }, { status: 400 });
+  void syncCatalogToSheet(); // mirror katalog ke Sheet (fire-and-forget)
   return NextResponse.json({ ok: true });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Settings } from "@/lib/settings";
 
@@ -209,8 +209,10 @@ export default function PengaturanClient({ settings }: { settings: Settings }) {
         </button>
       </form>
 
-      {/* Preview struk */}
-      <div className="lg:sticky lg:top-16 h-fit">
+      {/* Preview struk + kelola Google Sheet */}
+      <div className="lg:sticky lg:top-16 h-fit space-y-4">
+        <SheetManager />
+        <div>
         <p className="mb-2 text-xs font-medium text-slate-500">Pratinjau struk</p>
         <div
           className="mx-auto rounded-lg bg-white p-3 text-[12px] leading-tight shadow ring-1 ring-slate-200"
@@ -243,7 +245,96 @@ export default function PengaturanClient({ settings }: { settings: Settings }) {
             </>
           )}
         </div>
+        </div>
       </div>
+    </div>
+  );
+}
+
+/// Kartu kelola Google Sheet: status koneksi, ganti spreadsheet, sinkron ulang.
+function SheetManager() {
+  const [state, setState] = useState<{ enabled: boolean; url?: string | null; serviceAccountEmail?: string } | null>(null);
+  const [url, setUrl] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/sheet")
+      .then((r) => r.json())
+      .then(setState)
+      .catch(() => setState({ enabled: false }));
+  }, []);
+
+  async function saveSheet(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg("");
+    const res = await fetch("/api/admin/sheet", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    const body = await res.json();
+    setBusy(false);
+    if (!res.ok) {
+      setMsg(`❌ ${body.error || "Gagal"}`);
+      return;
+    }
+    setUrl("");
+    setMsg("✅ Spreadsheet diganti — klik Sinkronkan ulang");
+    setState((s) => (s ? { ...s, url: body.url } : s));
+  }
+
+  async function rebuild() {
+    setBusy(true);
+    setMsg("⏳ Menulis ulang ke Sheet…");
+    const res = await fetch("/api/admin/sheet", { method: "POST" });
+    const body = await res.json();
+    setBusy(false);
+    setMsg(res.ok ? "✅ Laporan + katalog tersinkron" : `❌ ${body.error || "Gagal"}`);
+    if (res.ok && body.url) setState((s) => (s ? { ...s, url: body.url } : s));
+  }
+
+  return (
+    <div className="card space-y-2 p-3">
+      <p className="text-xs font-semibold text-slate-700">📊 Google Sheet</p>
+      {state === null ? (
+        <p className="text-xs text-slate-400">Memuat…</p>
+      ) : !state.enabled ? (
+        <p className="text-xs text-slate-400">
+          Belum dikonfigurasi di server (set <code>GOOGLE_SA_JSON_B64</code> di .env).
+        </p>
+      ) : (
+        <>
+          {state.url ? (
+            <a href={state.url} target="_blank" rel="noreferrer" className="text-xs font-medium text-brand-600 underline">
+              Buka spreadsheet ↗
+            </a>
+          ) : (
+            <p className="text-xs text-slate-400">Belum ada sheet aktif — tempel URL di bawah.</p>
+          )}
+          {state.serviceAccountEmail && (
+            <p className="break-all text-[11px] text-slate-400">
+              Share sheet ke: <code>{state.serviceAccountEmail}</code> (role Editor)
+            </p>
+          )}
+          <form onSubmit={saveSheet} className="flex gap-1">
+            <input
+              className="input text-xs"
+              placeholder="Tempel URL Google Sheet…"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+            />
+            <button className="btn-ghost shrink-0 text-xs" disabled={busy || !url.trim()}>
+              Ganti
+            </button>
+          </form>
+          <button className="btn-ghost w-full text-xs" onClick={rebuild} disabled={busy}>
+            🔄 Sinkronkan ulang (transaksi + katalog)
+          </button>
+          {msg && <p className="text-[11px] text-slate-500">{msg}</p>}
+        </>
+      )}
     </div>
   );
 }

@@ -74,10 +74,10 @@ model VariantOptionStock {
 
 // Bahan/stok yang dihitung: kemasan (cup, wadah) ATAU bahan (mie, dll).
 model Packaging {
-  id         String          @id @default(cuid())
-  name       String          @unique
-  unit       String          @default("pcs")
-  stock      Int             @default(0)
+  id           String               @id @default(cuid())
+  name         String               @unique
+  unit         String               @default("pcs")
+  stock        Int                  @default(0)
   minStock     Int                  @default(0)
   updatedAt    DateTime             @updatedAt
   menuStocks   MenuStock[]
@@ -98,9 +98,9 @@ model MenuStock {
 }
 
 model StockMovement {
-  id          String    @id @default(cuid())
-  packaging   Packaging @relation(fields: [packagingId], references: [id], onDelete: Cascade)
-  packagingId String
+  id            String    @id @default(cuid())
+  packaging     Packaging @relation(fields: [packagingId], references: [id], onDelete: Cascade)
+  packagingId   String
   type          String // SALE | RESTOCK | IMPORT | ADJUST | VOID
   delta         Int
   before        Int
@@ -108,7 +108,7 @@ model StockMovement {
   note          String?
   userName      String?
   transactionId String? // untuk pembatalan/void
-  createdAt     DateTime @default(now())
+  createdAt     DateTime  @default(now())
 
   @@index([packagingId])
   @@index([createdAt])
@@ -194,6 +194,7 @@ model CashEntry {
   note         String?
   businessDate String
   userName     String?
+  clientId     String?  @unique // idempotency dari HP (antre offline, retry aman)
   createdAt    DateTime @default(now())
 
   @@index([businessDate])

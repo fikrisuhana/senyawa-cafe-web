@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { getAuthFromRequest } from "@/lib/auth";
-import { sheetEnabled, getOrCreateSheet, rebuildSheet, sheetUrl } from "@/lib/gsheet";
+import {
+  sheetEnabled,
+  getOrCreateSheet,
+  rebuildSheet,
+  sheetUrl,
+  setSheetIdFrom,
+  serviceAccountEmail,
+} from "@/lib/gsheet";
 
 // GET → status + link spreadsheet (buat/ambil kalau perlu).
 export async function GET(req: Request) {
@@ -8,7 +15,26 @@ export async function GET(req: Request) {
   if (!user || user.role !== "ADMIN") return NextResponse.json({ error: "Khusus admin" }, { status: 403 });
   if (!sheetEnabled()) return NextResponse.json({ enabled: false });
   const id = await getOrCreateSheet();
-  return NextResponse.json({ enabled: true, id, url: id ? sheetUrl(id) : null });
+  return NextResponse.json({
+    enabled: true,
+    id,
+    url: id ? sheetUrl(id) : null,
+    serviceAccountEmail: serviceAccountEmail(),
+  });
+}
+
+// PUT → ganti spreadsheet aktif (tempel URL atau ID Google Sheet).
+export async function PUT(req: Request) {
+  const user = await getAuthFromRequest(req);
+  if (!user || user.role !== "ADMIN") return NextResponse.json({ error: "Khusus admin" }, { status: 403 });
+  if (!sheetEnabled()) {
+    return NextResponse.json({ error: "Google Sheet belum dikonfigurasi (GOOGLE_SA_JSON_B64 di .env)" }, { status: 400 });
+  }
+  const body = await req.json().catch(() => ({}));
+  const input = String(body.url || "").trim();
+  if (!input) return NextResponse.json({ error: "Tempel URL / ID Google Sheet dulu" }, { status: 400 });
+  const id = await setSheetIdFrom(input);
+  return NextResponse.json({ ok: true, id, url: sheetUrl(id) });
 }
 
 // POST → tulis ulang seluruh laporan ke Sheet (refresh manual).

@@ -181,7 +181,7 @@ export async function appendTransactionToSheet(trxId: string): Promise<void> {
   }
 }
 
-/** Tulis ulang seluruh tab Transaksi dari DB + refresh header/dashboard. */
+/** Tulis ulang seluruh tab Transaksi dari DB + refresh header/dashboard + katalog. */
 export async function rebuildSheet(): Promise<string | null> {
   if (!sheetEnabled()) return null;
   const id = await getOrCreateSheet();
@@ -205,5 +205,101 @@ export async function rebuildSheet(): Promise<string | null> {
     requestBody: { values: [TX_HEADER, ...rows] },
   });
   await _writeHeaderAndDashboard(id);
+  await syncCatalogToSheet();
   return id;
+}
+
+/**
+ * Mirror KATALOG (menu/bahan/voucher/karyawan) dari Postgres ke tab Sheet.
+ * Ditulis ulang penuh (clear + update) — Sheet tetap sifatnya BACA (laporan owner);
+ * satu pintu edit katalog = web admin. Dipanggil tiap perubahan katalog (fire-and-forget)
+ * dan saat rebuild manual.
+ */
+export async function syncCatalogToSheet(): Promise<void> {
+  try {
+    if (!sheetEnabled()) return;
+    const id = await getOrCreateSheet();
+    if (!id) return;
+    const auth = jwt();
+    if (!auth) return;
+    const sheets = google.sheets({ version: "v4", auth });
+    const sheetId: string = id;
+
+    // Pastikan tab katalog ada.
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: id });
+    const titles = (meta.data.sheets || []).map((s) => s.properties?.title || "");
+    const need = ["Menu", "Bahan", "Voucher", "Karyawan"].filter((t) => !titles.includes(t));
+    if (need.length) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: id,
+        requestBody: { requests: need.map((t) => ({ addSheet: { properties: { title: t } } })) },
+      });
+    }
+
+    async function writeTab(title: string, header: string[], rows: (string | number | boolean | null)[][]) {
+      await sheets.spreadsheets.values.clear({ spreadsheetId: sheetId, range: `'${title}'!A2:Z` });
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: sheetId,
+        range: `'${title}'!A1`,
+        valueInputOption: "RAW",
+        requestBody: { values: [header, ...rows] },
+      });
+    }
+
+    const [menus, pkgs, vouchers, employees] = await Promise.all([
+      prisma.menuItem.findMany({
+        orderBy: [{ active: "desc" }, { sortOrder: "asc" }],
+        include: { stocks: { include: { packaging: true } }, variantGroups: { include: { options: true } } },
+      }),
+      prisma.packaging.findMany({ orderBy: { name: "asc" } }),
+      prisma.voucher.findMany({ orderBy: { name: "asc" } }),
+      prisma.employee.findMany({ orderBy: { name: "asc" } }),
+    ]);
+
+    await writeTab(
+      "Menu",
+      ["nama", "kategori", "harga", "modal", "aktif", "urutan", "bahan (per porsi)", "varian"],
+      menus.map((m) => [
+        m.name,
+        m.category,
+        m.price,
+        m.cost,
+        m.active ? "YA" : "TIDAK",
+        m.sortOrder,
+        m.stocks.map((s) => `${s.packaging.name} x${s.qty}`).join(", "),
+        m.variantGroups
+          .map((g) => `${g.name}: ${g.options.map((o) => `${o.name}${o.priceDelta ? ` +${o.priceDelta}` : ""}`).join(" / ")}`)
+          .join("; "),
+      ]),
+    );
+
+    await writeTab(
+      "Bahan",
+      ["nama", "satuan", "stok", "min_stok", "status"],
+      pkgs.map((p) => [p.name, p.unit, p.stock, p.minStock, p.stock <= p.minStock ? "PERLU RESTOK" : "AMAN"]),
+    );
+
+    await writeTab(
+      "Voucher",
+      ["nama", "tipe", "nilai", "aktif", "kuota", "terpakai", "mulai", "selesai"],
+      vouchers.map((v) => [
+        v.name,
+        v.type,
+        v.value,
+        v.active ? "YA" : "TIDAK",
+        v.maxUses ?? "∞",
+        v.usedCount,
+        v.validFrom ? new Date(v.validFrom).toISOString().slice(0, 10) : "",
+        v.validUntil ? new Date(v.validUntil).toISOString().slice(0, 10) : "",
+      ]),
+    );
+
+    await writeTab(
+      "Karyawan",
+      ["nama", "aktif"],
+      employees.map((e) => [e.name, e.active ? "YA" : "TIDAK"]),
+    );
+  } catch (e) {
+    console.error("syncCatalogToSheet gagal:", (e as Error).message);
+  }
 }

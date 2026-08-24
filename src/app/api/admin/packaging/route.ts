@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { syncCatalogToSheet } from "@/lib/gsheet";
 import { getSession } from "@/lib/auth";
 
 export async function POST(req: Request) {
@@ -60,5 +61,6 @@ export async function DELETE(req: Request) {
   if (!id) return NextResponse.json({ error: "id wajib" }, { status: 400 });
   // Relasi MenuStock ikut terhapus otomatis (onDelete: Cascade).
   await prisma.packaging.delete({ where: { id } });
+  void syncCatalogToSheet(); // mirror katalog ke Sheet (fire-and-forget)
   return NextResponse.json({ ok: true });
 }

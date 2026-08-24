@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { prisma } from "@/lib/db";
+import { syncCatalogToSheet } from "@/lib/gsheet";
 import { getSession } from "@/lib/auth";
 
 // GET: unduh template Excel (nama, satuan, stok, stok_min)
@@ -110,5 +111,6 @@ export async function POST(req: Request) {
     }
   }
 
+  void syncCatalogToSheet();
   return NextResponse.json({ ok: true, created, updated, errors });
 }

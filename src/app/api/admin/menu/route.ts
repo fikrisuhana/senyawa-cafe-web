@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { syncCatalogToSheet } from "@/lib/gsheet";
 
 type StockIn = { packagingId: string; qty: number };
 
@@ -32,6 +33,7 @@ export async function POST(req: Request) {
         stocks: { create: stocks },
       },
     });
+    void syncCatalogToSheet();
     return NextResponse.json({ ok: true, id: m.id });
   } catch (e: any) {
     return NextResponse.json(
@@ -63,6 +65,7 @@ export async function PUT(req: Request) {
         data: stocks.map((s) => ({ menuItemId: b.id, packagingId: s.packagingId, qty: s.qty })),
       }),
     ]);
+    void syncCatalogToSheet();
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json(
@@ -76,5 +79,6 @@ export async function DELETE(req: Request) {
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id wajib" }, { status: 400 });
   await prisma.menuItem.delete({ where: { id } });
+  void syncCatalogToSheet(); // mirror katalog ke Sheet (fire-and-forget)
   return NextResponse.json({ ok: true });
 }

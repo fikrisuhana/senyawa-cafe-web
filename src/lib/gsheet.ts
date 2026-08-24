@@ -263,10 +263,9 @@ async function _dashboardSheetId(id: string, sheets: any): Promise<number> {
 }
 
 /**
- * Tab JADWAL SHIFT (matriks tanggal × shift, diisi manual owner di Sheet).
- * Server HANYA menyiapkan struktur: header shift (dari Setting web), kolom
- * tanggal otomatis mengikuti bulan terpilih (dropdown B1), dan dropdown bulan.
- * Sel isian nama TIDAK PERNAH ditimpa — tab ini bukan mirror, ini milik owner.
+ * Tab JADWAL SHIFT — matriks Tanggal × Shift, ISI OTOMATIS dari data absensi
+ * (siapa beneran absen per shift, dari HP/web). Kolom shift = nama shift di
+ * Setting web. Ditulis ulang penuh tiap rebuild & tiap absensi berubah.
  */
 export async function ensureJadwalTab(): Promise<void> {
   try {
@@ -277,81 +276,59 @@ export async function ensureJadwalTab(): Promise<void> {
     if (!auth) return;
     const sheets = google.sheets({ version: "v4", auth });
 
-    // Buat tab kalau belum ada, lalu ambil meta TERBARU (untuk sheetId valid).
     let meta = await sheets.spreadsheets.get({ spreadsheetId: id });
-    if (!(meta.data.sheets || []).some((s) => s.properties?.title === "Jadwal")) {
+    if (!(meta.data.sheets || []).some((x) => x.properties?.title === "Jadwal")) {
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId: id,
         requestBody: { requests: [{ addSheet: { properties: { title: "Jadwal" } } }] },
       });
-      meta = await sheets.spreadsheets.get({ spreadsheetId: id });
     }
 
-    // Kolom ikut NAMA SHIFT dari Setting web (mis. Pagi, Malam).
+    // Kolom shift = Setting web (default Pagi,Malam).
     const shifts = ((await getSetting("shifts")) || "Pagi,Malam")
       .split(",")
       .map((x) => x.trim())
       .filter(Boolean);
-    const header = ["Tanggal", ...shifts];
 
-    // Kolom tanggal: formula per baris (mengikuti bulan di B1). Baris 4..34 = tgl 1..31.
-    const dateRows = Array.from({ length: 31 }, (_, i) => {
-      const day = i + 1;
-      return [
-        `=IF($B$1="","",IF(MONTH(DATE(YEAR(DATEVALUE($B$1&"-01")),MONTH(DATEVALUE($B$1&"-01")),${day}))<>MONTH(DATEVALUE($B$1&"-01")),"",TEXT(DATE(YEAR(DATEVALUE($B$1&"-01")),MONTH(DATEVALUE($B$1&"-01")),${day}),"dd/mm")))`,
-        ...shifts.map(() => ""),
-      ];
-    });
+    // Bulan berjalan (server time).
+    const now = new Date();
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
 
-    // Jangan timpa pilihan bulan owner: cek B1 dulu.
-    const cur = await sheets.spreadsheets.values.get({ spreadsheetId: id, range: "Jadwal!B1" });
-    const b1 = (cur.data.values?.[0]?.[0] ?? "").toString();
+    const atts = await prisma.attendance.findMany({ where: { businessDate: { startsWith: ym } } });
+    // matrix: tanggal (int) -> shift -> nama[]
+    const matrix = new Map<number, Map<string, string[]>>();
+    for (const a of atts) {
+      const d = Number((a.businessDate || "").slice(8, 10));
+      if (!d) continue;
+      const sh = a.shift || "(tanpa shift)";
+      let row = matrix.get(d);
+      if (!row) matrix.set(d, (row = new Map()));
+      const names = row.get(sh) || [];
+      if (!names.includes(a.employeeName)) names.push(a.employeeName);
+      row.set(sh, names);
+    }
 
-    // Bersihkan area header dulu (sisa kolom/label versi lama tak tertinggal).
-    // Hanya baris 1-3 — isian manual owner (baris 4+) tak disentuh.
-    await sheets.spreadsheets.values.clear({ spreadsheetId: id, range: "Jadwal!A1:Z3" });
+    const rows: (string | number)[][] = [];
+    for (let d = 1; d <= days; d++) {
+      const row = matrix.get(d);
+      rows.push([
+        `${String(d).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}`,
+        ...shifts.map((sh) => (row?.get(sh) || []).join(", ")),
+      ]);
+    }
+
+    await sheets.spreadsheets.values.clear({ spreadsheetId: id, range: "Jadwal!A1:Z" });
     await sheets.spreadsheets.values.update({
       spreadsheetId: id,
       range: "Jadwal!A1",
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [
-          ["📅 JADWAL SHIFT", b1 || '=TEXT(TODAY(),"yyyy-mm")'],
-          ["Pilih bulan di B1 (dropdown). Isi nama karyawan per tanggal × shift — kolom isian ini TIDAK ditimpa server. Tanggal otomatis mengikuti bulan.", ""],
-          header,
-          ...dateRows,
-        ],
-      },
-    });
-
-    // Helper daftar bulan (2 bln lalu s/d 12 bln depan) + dropdown B1 darinya.
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: id,
-      range: "Jadwal!M1",
-      valueInputOption: "USER_ENTERED",
-      requestBody: {
-        values: [
-          ['=ARRAYFORMULA(TEXT(EDATE(EOMONTH(TODAY(),-2)+1,SEQUENCE(1,15)),"yyyy-mm"))'],
-        ],
-      },
-    });
-
-    const jadwalSheet = (meta.data.sheets || []).find((s) => s.properties?.title === "Jadwal");
-    if (!jadwalSheet) return;
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: id,
-      requestBody: {
-        requests: [
-          {
-            setDataValidation: {
-              range: { sheetId: jadwalSheet.properties?.sheetId ?? 0, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 1, endColumnIndex: 2 },
-              rule: {
-                condition: { type: "ONE_OF_RANGE", values: [{ userEnteredValue: "=Jadwal!M1:AA1" }] },
-                showCustomUi: true,
-                strict: true,
-              },
-            },
-          },
+          [`📅 JADWAL SHIFT — ${ym} (isi OTOMATIS dari absensi)`],
+          ["Baris = tanggal, kolom = shift, isi = karyawan yang absen shift itu. Riwayat bulan lain: tab Absensi / web."],
+          ["Tanggal", ...shifts],
+          ...rows,
         ],
       },
     });
@@ -438,7 +415,7 @@ export async function rebuildSheet(): Promise<string | null> {
   await _writeHeaderAndDashboard(id);
   await syncCatalogToSheet();
   await syncOpsToSheet();
-  await ensureJadwalTab(); // struktur jadwal shift (isian owner tak disentuh)
+  await ensureJadwalTab(); // matriks absensi per shift
   return id;
 }
 
@@ -504,6 +481,7 @@ export async function syncOpsToSheet(): Promise<void> {
       ]),
     );
 
+    await ensureJadwalTab(); // matriks absensi per shift ikut refresh
     await writeTab(
       "Restok_Log",
       ["waktu", "bahan", "tipe", "perubahan", "stok_sesudah", "oleh", "catatan"],

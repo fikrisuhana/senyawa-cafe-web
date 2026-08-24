@@ -130,50 +130,51 @@ async function _writeHeaderAndDashboard(id: string) {
     requestBody: { values: [TX_HEADER] },
   });
 
-  // Dashboard REKAP INTERAKTIF — pilih tanggal di B4 (kosong = hari ini),
-  // semua rumus ikut tanggal itu (kolom Transaksi: B hari_usaha, F metode,
-  // J total, K modal, L status).
-  // D = tanggal efektif: =IF($B$4="",TODAY(),$B$4)
-  const D = 'IF($B$4="",TODAY(),$B$4)';
-  const hari = (off: number) => `TEXT(${D}-${off},"yyyy-mm-dd")`;
-  const hariIni = hari(0);
-  const bulanTerpilih = `TEXT(${D},"yyyy-mm")&"*"`;
+  // Dashboard REKAP INTERAKTIF — B4 = DROPDOWN periode (Hari ini / 7 hari /
+  // 14 hari / 1 bulan / 2 bulan / Tanggal tertentu). Kalau "Tanggal tertentu",
+  // tanggal diisi di B5. Helper H1/H2 = tanggal mulai & akhir periode.
+  // (kolom Transaksi: B hari_usaha, F metode, J total, K modal, L status)
+  const isRange = `OR($B$4="7 hari",$B$4="14 hari",$B$4="1 bulan",$B$4="2 bulan")`;
+  const minusN = `IFS($B$4="7 hari",6,$B$4="14 hari",13,$B$4="1 bulan",29,$B$4="2 bulan",59,TRUE,0)`;
+  const startD = `IF(${isRange},TODAY()-${minusN},IF($B$5="",TODAY(),$B$5))`;
+  const endD = `IF(${isRange},TODAY(),IF($B$5="",TODAY(),$B$5))`;
+  const inPeriod = `Transaksi!B:B,">="&TEXT($H$1,"yyyy-mm-dd"),Transaksi!B:B,"<="&TEXT($H$2,"yyyy-mm-dd")`;
   const sum = (col: string, ...cond: string[]) => `SUMIFS(Transaksi!${col},${cond.join(",")})`;
   const aktif = `Transaksi!L:L,"ACTIVE"`;
+  const bulanAkhir = `TEXT($H$2,"yyyy-mm")&"*"`;
   const rows: (string | number)[][] = [
-    ["📊 RUANG SENYAWA — LAPORAN POS", ""],
-    ["Pilih tanggal laporan di sel B4 (kosongkan = hari ini). Selain B4, jangan diedit.", ""],
+    ["📊 RUANG SENYAWA — LAPORAN POS", "", "", "", "(mulai)", "", "", `=${startD}`],
+    ["Pilih PERIODE di B4 (dropdown). Kalau \"Tanggal tertentu\", isi tanggalnya di B5. Selain B4/B5, jangan diedit.", "", "", "", "(sampai)", "", "", `=${endD}`],
     ["", ""],
-    ["📅 Tanggal laporan", ""],
+    ["📅 Periode laporan", "Hari ini"],
+    ["   atau pilih tanggal (utk \"Tanggal tertentu\")", ""],
     ["", ""],
-    ["■ RINGKASAN HARI TERPILIH", ""],
-    ["Omzet", `=${sum("J:J", `Transaksi!B:B,${hariIni}`, aktif)}`],
-    ["Transaksi", `=COUNTIFS(Transaksi!B:B,${hariIni},${aktif})`],
-    ["Rata-rata / transaksi", `=IFERROR(${sum("J:J", `Transaksi!B:B,${hariIni}`, aktif)}/COUNTIFS(Transaksi!B:B,${hariIni},${aktif}),0)`],
-    ["Modal (HPP)", `=${sum("K:K", `Transaksi!B:B,${hariIni}`, aktif)}`],
-    ["Untung kotor", `=${sum("J:J", `Transaksi!B:B,${hariIni}`, aktif)}-${sum("K:K", `Transaksi!B:B,${hariIni}`, aktif)}`],
-    ["Dibatalkan (VOID)", `=COUNTIFS(Transaksi!B:B,${hariIni},Transaksi!L:L,"VOID")`],
+    ["■ RINGKASAN PERIODE TERPILIH", ""],
+    ["Omzet", `=${sum("J:J", inPeriod, aktif)}`],
+    ["Transaksi", `=COUNTIFS(${inPeriod},${aktif})`],
+    ["Rata-rata / transaksi", `=IFERROR(${sum("J:J", inPeriod, aktif)}/COUNTIFS(${inPeriod},${aktif}),0)`],
+    ["Modal (HPP)", `=${sum("K:K", inPeriod, aktif)}`],
+    ["Untung kotor", `=${sum("J:J", inPeriod, aktif)}-${sum("K:K", inPeriod, aktif)}`],
+    ["Dibatalkan (VOID)", `=COUNTIFS(${inPeriod},Transaksi!L:L,"VOID")`],
     ["", ""],
-    ["■ METODE PEMBAYARAN (hari terpilih)", ""],
-    ["  Tunai", `=${sum("J:J", `Transaksi!B:B,${hariIni}`, 'Transaksi!F:F,"TUNAI"', aktif)}`],
-    ["  QRIS", `=${sum("J:J", `Transaksi!B:B,${hariIni}`, 'Transaksi!F:F,"QRIS"', aktif)}`],
-    ["  Transfer", `=${sum("J:J", `Transaksi!B:B,${hariIni}`, 'Transaksi!F:F,"TRANSFER"', aktif)}`],
-    ["  Lainnya", `=${sum("J:J", `Transaksi!B:B,${hariIni}`, aktif)}-${sum("J:J", `Transaksi!B:B,${hariIni}`, 'Transaksi!F:F,"TUNAI"', aktif)}-${sum("J:J", `Transaksi!B:B,${hariIni}`, 'Transaksi!F:F,"QRIS"', aktif)}-${sum("J:J", `Transaksi!B:B,${hariIni}`, 'Transaksi!F:F,"TRANSFER"', aktif)}`],
+    ["■ METODE PEMBAYARAN (periode terpilih)", ""],
+    ["  Tunai", `=${sum("J:J", inPeriod, 'Transaksi!F:F,"TUNAI"', aktif)}`],
+    ["  QRIS", `=${sum("J:J", inPeriod, 'Transaksi!F:F,"QRIS"', aktif)}`],
+    ["  Transfer", `=${sum("J:J", inPeriod, 'Transaksi!F:F,"TRANSFER"', aktif)}`],
+    ["  Lainnya", `=${sum("J:J", inPeriod, aktif)}-${sum("J:J", inPeriod, 'Transaksi!F:F,"TUNAI"', aktif)}-${sum("J:J", inPeriod, 'Transaksi!F:F,"QRIS"', aktif)}-${sum("J:J", inPeriod, 'Transaksi!F:F,"TRANSFER"', aktif)}`],
     ["", ""],
-    ["■ KAS & ABSENSI (hari terpilih)", ""],
-    ["Kas masuk (MASUK)", `=SUMIFS(Kas!F:F,Kas!A:A,${hariIni},Kas!C:C,"MASUK")`],
-    ["Kas keluar (KELUAR)", `=SUMIFS(Kas!F:F,Kas!A:A,${hariIni},Kas!C:C,"KELUAR")`],
-    ["Kehadiran (orang×shift)", `=COUNTIF(Absensi!A:A,${hariIni})`],
+    ["■ KAS & ABSENSI (periode terpilih)", ""],
+    ["Kas masuk (MASUK)", `=SUMIFS(Kas!F:F,Kas!A:A,">="&TEXT($H$1,"yyyy-mm-dd"),Kas!A:A,"<="&TEXT($H$2,"yyyy-mm-dd"),Kas!C:C,"MASUK")`],
+    ["Kas keluar (KELUAR)", `=SUMIFS(Kas!F:F,Kas!A:A,">="&TEXT($H$1,"yyyy-mm-dd"),Kas!A:A,"<="&TEXT($H$2,"yyyy-mm-dd"),Kas!C:C,"KELUAR")`],
+    ["Kehadiran (orang×shift)", `=COUNTIFS(Absensi!A:A,">="&TEXT($H$1,"yyyy-mm-dd"),Absensi!A:A,"<="&TEXT($H$2,"yyyy-mm-dd"))`],
     ["", ""],
-    ["■ TREN 7 HARI (berakhir tanggal terpilih)", "OMZET", "TRX"],
-    ...[6, 5, 4, 3, 2, 1, 0].map(
-      (off) => a7(off),
-    ),
+    ["■ TREN 7 HARI (berakhir akhir periode)", "OMZET", "TRX"],
+    ...[6, 5, 4, 3, 2, 1, 0].map((off) => a7(off)),
     ["", ""],
-    ["■ BULAN TERPILIH", ""],
-    ["Omzet", `=${sum("J:J", `Transaksi!B:B,${bulanTerpilih}`, aktif)}`],
-    ["Transaksi", `=COUNTIFS(Transaksi!B:B,${bulanTerpilih},${aktif})`],
-    ["Untung kotor", `=${sum("J:J", `Transaksi!B:B,${bulanTerpilih}`, aktif)}-${sum("K:K", `Transaksi!B:B,${bulanTerpilih}`, aktif)}`],
+    ["■ BULAN DARI AKHIR PERIODE", ""],
+    ["Omzet", `=${sum("J:J", `Transaksi!B:B,${bulanAkhir}`, aktif)}`],
+    ["Transaksi", `=COUNTIFS(Transaksi!B:B,${bulanAkhir},${aktif})`],
+    ["Untung kotor", `=${sum("J:J", `Transaksi!B:B,${bulanAkhir}`, aktif)}-${sum("K:K", `Transaksi!B:B,${bulanAkhir}`, aktif)}`],
     ["", ""],
     ["■ SEMUA WAKTU", ""],
     ["Total omzet", `=${sum("J:J", aktif)}`],
@@ -187,14 +188,42 @@ async function _writeHeaderAndDashboard(id: string) {
     requestBody: { values: rows },
   });
 
-  // Format B4 sebagai tanggal biar gampang diklik-kalendernya.
+  const dashId = await _dashboardSheetId(id, sheets);
+  // B4 = dropdown periode; B5 = tanggal (format date); H1/H2 helper tampil sbg tanggal.
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: id,
     requestBody: {
       requests: [
         {
+          setDataValidation: {
+            range: { sheetId: dashId, startRowIndex: 3, endRowIndex: 4, startColumnIndex: 1, endColumnIndex: 2 },
+            rule: {
+              condition: {
+                type: "ONE_OF_LIST",
+                values: [
+                  "Hari ini",
+                  "7 hari",
+                  "14 hari",
+                  "1 bulan",
+                  "2 bulan",
+                  "Tanggal tertentu",
+                ].map((v) => ({ userEnteredValue: v })),
+              },
+              showCustomUi: true,
+              strict: true,
+            },
+          },
+        },
+        {
           repeatCell: {
-            range: { sheetId: await _dashboardSheetId(id, sheets), startRowIndex: 3, endRowIndex: 4, startColumnIndex: 1, endColumnIndex: 2 },
+            range: { sheetId: dashId, startRowIndex: 4, endRowIndex: 5, startColumnIndex: 1, endColumnIndex: 2 },
+            cell: { userEnteredFormat: { numberFormat: { type: "DATE", pattern: "yyyy-mm-dd" } } },
+            fields: "userEnteredFormat.numberFormat",
+          },
+        },
+        {
+          repeatCell: {
+            range: { sheetId: dashId, startRowIndex: 0, endRowIndex: 2, startColumnIndex: 7, endColumnIndex: 8 },
             cell: { userEnteredFormat: { numberFormat: { type: "DATE", pattern: "yyyy-mm-dd" } } },
             fields: "userEnteredFormat.numberFormat",
           },
@@ -205,8 +234,7 @@ async function _writeHeaderAndDashboard(id: string) {
 }
 
 function a7(off: number): (string | number)[] {
-  const D = 'IF($B$4="",TODAY(),$B$4)';
-  const h = `TEXT(${D}-${off},"yyyy-mm-dd")`;
+  const h = `TEXT($H$2-${off},"yyyy-mm-dd")`;
   return [
     `=${h}`,
     `=SUMIFS(Transaksi!J:J,Transaksi!B:B,${h},Transaksi!L:L,"ACTIVE")`,

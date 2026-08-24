@@ -34,7 +34,8 @@ async function main() {
     receiptFooter: "Terima kasih! Sampai jumpa lagi :)",
     quickCash: "pas,20000,50000,100000",
     paperWidth: "58",
-    shifts: "Sore,Malam",
+    shifts: "Pagi,Malam",
+    shiftHours: "9-17,17-24",
     kasAwal: "250000",
   };
   for (const [key, value] of Object.entries(defaults)) {

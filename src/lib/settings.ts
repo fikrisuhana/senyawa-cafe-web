@@ -11,7 +11,8 @@ export type Settings = {
   receiptFooter: string;
   quickCash: string; // csv nominal, "pas" = tepat total
   paperWidth: number; // 58 | 80 (mm)
-  shifts: string; // csv nama shift, mis. "Sore,Malam"
+  shifts: string; // csv nama shift, mis. "Pagi,Malam"
+  shiftHours: string; // csv jam per shift sejajar `shifts`, mis. "9-17,17-24"
   kasAwal: number; // modal kas awal harian (mis. 250000)
 };
 
@@ -26,7 +27,8 @@ const DEFAULTS: Settings = {
   receiptFooter: "Terima kasih!",
   quickCash: "pas,20000,50000,100000",
   paperWidth: 58,
-  shifts: "Sore,Malam",
+  shifts: "Pagi,Malam",
+  shiftHours: "9-17,17-24",
   kasAwal: 250000,
 };
 
@@ -45,6 +47,7 @@ export async function getSettings(): Promise<Settings> {
     quickCash: map.quickCash ?? DEFAULTS.quickCash,
     paperWidth: numOr(map.paperWidth, DEFAULTS.paperWidth),
     shifts: map.shifts ?? DEFAULTS.shifts,
+    shiftHours: map.shiftHours ?? DEFAULTS.shiftHours,
     kasAwal: numOr(map.kasAwal, DEFAULTS.kasAwal),
   };
 }

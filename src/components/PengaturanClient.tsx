@@ -19,6 +19,7 @@ export default function PengaturanClient({ settings }: { settings: Settings }) {
     dayCutoffHour: String(settings.dayCutoffHour),
     quickCash: settings.quickCash,
     shifts: settings.shifts,
+    shiftHours: settings.shiftHours,
     kasAwal: String(settings.kasAwal),
     paperWidth: String(settings.paperWidth),
     receiptHeader: settings.receiptHeader,
@@ -163,7 +164,15 @@ export default function PengaturanClient({ settings }: { settings: Settings }) {
               <label className="label">Daftar shift absensi (pisah koma)</label>
               <input className="input" value={f.shifts} onChange={(e) => set("shifts", e.target.value)} placeholder="Sore,Malam" />
               <p className="mt-1 text-xs text-slate-500">
-                Kosongkan kalau tak pakai shift. Contoh: <code>Pagi,Sore,Malam</code>.
+                Kosongkan kalau tak pakai shift. Contoh: <code>Pagi,Malam</code>.
+              </p>
+            </div>
+            <div>
+              <label className="label">Jam per shift (sejajar daftar shift)</label>
+              <input className="input" value={f.shiftHours} onChange={(e) => set("shiftHours", e.target.value)} placeholder="9-17,17-24" />
+              <p className="mt-1 text-xs text-slate-500">
+                Dipakai HP buat deteksi shift berjalan (tab absen otomatis pindah).
+                Contoh 2 shift: Pagi 09.00–17.00, Malam 17.00–24.00 → <code>9-17,17-24</code>.
               </p>
             </div>
             <div>

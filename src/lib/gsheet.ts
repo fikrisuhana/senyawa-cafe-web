@@ -287,11 +287,8 @@ export async function ensureJadwalTab(): Promise<void> {
       meta = await sheets.spreadsheets.get({ spreadsheetId: id });
     }
 
-    // Header shift dari Setting web (default Pagi,Malam — sama dgn absen).
-    const shifts = ((await getSetting("shifts")) || "Pagi,Malam")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    // Kolom generik sederhana: Tanggal | Shift 1 | Shift 2 (permintaan owner).
+    const shifts = ["Shift 1", "Shift 2"];
     const header = ["Tanggal", ...shifts];
 
     // Kolom tanggal: formula per baris (mengikuti bulan di B1). Baris 4..34 = tgl 1..31.
@@ -313,7 +310,7 @@ export async function ensureJadwalTab(): Promise<void> {
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [
-          ["📅 JADWAL SHIFT", b1 || '=TEXT(TODAY(),"yyyy-mm")', "", "", "", "", "", "", "", "", "", "Pilihan bulan →"],
+          ["📅 JADWAL SHIFT", b1 || '=TEXT(TODAY(),"yyyy-mm")'],
           ["Pilih bulan di B1 (dropdown). Isi nama karyawan per tanggal × shift — kolom isian ini TIDAK ditimpa server. Tanggal otomatis mengikuti bulan.", ""],
           header,
           ...dateRows,

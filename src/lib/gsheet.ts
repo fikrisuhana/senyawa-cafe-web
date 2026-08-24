@@ -181,6 +181,8 @@ async function _writeHeaderAndDashboard(id: string) {
     ["Total transaksi", "=COUNTA(Transaksi!A2:A)"],
     ["Total dibatalkan (VOID)", '=COUNTIF(Transaksi!L:L,"VOID")'],
   ];
+  // Bersihkan dulu (layout bisa berubah antar versi — sisa kolom lama tak tertinggal).
+  await sheets.spreadsheets.values.clear({ spreadsheetId: id, range: "'Dashboard'!A2:Z" });
   await sheets.spreadsheets.values.update({
     spreadsheetId: id,
     range: "'Dashboard'!A1",

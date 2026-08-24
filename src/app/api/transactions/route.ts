@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getAuthFromRequest } from "@/lib/auth";
+import { appendTransactionToSheet } from "@/lib/gsheet";
 import { getSettings } from "@/lib/settings";
 import { businessDateKey } from "@/lib/bizday";
 
@@ -169,6 +170,9 @@ export async function POST(req: Request) {
 
       return trx;
     });
+
+    // Auto-ekspor ke Google Sheet (non-blocking; kalau tak dikonfigurasi → no-op).
+    appendTransactionToSheet(result.id).catch(() => {});
 
     return NextResponse.json({ ok: true, code: result.code, id: result.id });
   } catch (e: any) {

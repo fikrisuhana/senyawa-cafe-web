@@ -304,6 +304,9 @@ export async function ensureJadwalTab(): Promise<void> {
     const cur = await sheets.spreadsheets.values.get({ spreadsheetId: id, range: "Jadwal!B1" });
     const b1 = (cur.data.values?.[0]?.[0] ?? "").toString();
 
+    // Bersihkan area header dulu (sisa kolom/label versi lama tak tertinggal).
+    // Hanya baris 1-3 — isian manual owner (baris 4+) tak disentuh.
+    await sheets.spreadsheets.values.clear({ spreadsheetId: id, range: "Jadwal!A1:Z3" });
     await sheets.spreadsheets.values.update({
       spreadsheetId: id,
       range: "Jadwal!A1",

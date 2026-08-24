@@ -54,6 +54,30 @@ export function sheetUrl(id: string): string {
   return `https://docs.google.com/spreadsheets/d/${id}/edit`;
 }
 
+/** Email service account (buat ditampilkan di web: owner share sheet ke email ini). */
+export function serviceAccountEmail(): string {
+  return creds()?.client_email || "";
+}
+
+/** Ambil ID dari URL Google Sheet (atau kembalikan apa adanya kalau sudah ID). */
+export function extractSheetId(input: string): string {
+  const s = (input || "").trim();
+  const m = s.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : s;
+}
+
+/** ID sheet aktif: dari Setting DB (bisa diubah web) → fallback env GSHEET_ID. */
+export async function currentSheetId(): Promise<string> {
+  return ((await getSetting("gsheet_id")) || process.env.GSHEET_ID || "").trim();
+}
+
+/** Simpan/ganti sheet dari URL atau ID (dipanggil dari admin web). */
+export async function setSheetIdFrom(input: string): Promise<string> {
+  const id = extractSheetId(input);
+  await setSetting("gsheet_id", id);
+  return id;
+}
+
 /** Pastikan tab Dashboard & Transaksi ada di spreadsheet (owner bikin sheet kosong). */
 async function ensureTabs(id: string) {
   const auth = jwt();

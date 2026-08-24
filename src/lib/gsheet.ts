@@ -138,10 +138,10 @@ async function _writeHeaderAndDashboard(id: string) {
   const minusN = `IFS($B$4="7 hari",6,$B$4="14 hari",13,$B$4="1 bulan",29,$B$4="2 bulan",59,TRUE,0)`;
   const startD = `IF(${isRange},TODAY()-${minusN},IF($B$5="",TODAY(),$B$5))`;
   const endD = `IF(${isRange},TODAY(),IF($B$5="",TODAY(),$B$5))`;
-  const inPeriod = `Transaksi!B:B,">="&TEXT($H$1,"yyyy-mm-dd"),Transaksi!B:B,"<="&TEXT($H$2,"yyyy-mm-dd")`;
+  const inPeriod = `Transaksi!B:B,">="&DATEVALUE(TEXT($H$1,"yyyy-mm-dd")),Transaksi!B:B,"<="&DATEVALUE(TEXT($H$2,"yyyy-mm-dd"))`;
   const sum = (col: string, ...cond: string[]) => `SUMIFS(Transaksi!${col},${cond.join(",")})`;
   const aktif = `Transaksi!L:L,"ACTIVE"`;
-  const bulanAkhir = `TEXT($H$2,"yyyy-mm")&"*"`;
+  const bulanAkhir = `Transaksi!B:B,">="&EOMONTH($H$2,-1)+1,Transaksi!B:B,"<="&EOMONTH($H$2,0)`;
   const rows: (string | number)[][] = [
     ["📊 RUANG SENYAWA — LAPORAN POS", "", "", "", "(mulai)", "", "", `=${startD}`, "(pilih tgl)"],
     ["Pilih PERIODE di B4 (dropdown). Kalau \"Tanggal tertentu\", pilih tanggalnya di B5. Selain B4/B5, jangan diedit.", "", "", "", "(sampai)", "", "", `=${endD}`, '=IFERROR(SORT(UNIQUE(FILTER(Transaksi!B2:B,Transaksi!B2:B<>""))),"")'],
@@ -164,17 +164,17 @@ async function _writeHeaderAndDashboard(id: string) {
     ["  Lainnya", `=${sum("J:J", inPeriod, aktif)}-${sum("J:J", inPeriod, 'Transaksi!F:F,"TUNAI"', aktif)}-${sum("J:J", inPeriod, 'Transaksi!F:F,"QRIS"', aktif)}-${sum("J:J", inPeriod, 'Transaksi!F:F,"TRANSFER"', aktif)}`],
     ["", ""],
     ["■ KAS & ABSENSI (periode terpilih)", ""],
-    ["Kas masuk (MASUK)", `=SUMIFS(Kas!F:F,Kas!A:A,">="&TEXT($H$1,"yyyy-mm-dd"),Kas!A:A,"<="&TEXT($H$2,"yyyy-mm-dd"),Kas!C:C,"MASUK")`],
-    ["Kas keluar (KELUAR)", `=SUMIFS(Kas!F:F,Kas!A:A,">="&TEXT($H$1,"yyyy-mm-dd"),Kas!A:A,"<="&TEXT($H$2,"yyyy-mm-dd"),Kas!C:C,"KELUAR")`],
-    ["Kehadiran (orang×shift)", `=COUNTIFS(Absensi!A:A,">="&TEXT($H$1,"yyyy-mm-dd"),Absensi!A:A,"<="&TEXT($H$2,"yyyy-mm-dd"))`],
+    ["Kas masuk (MASUK)", `=SUMIFS(Kas!F:F,Kas!A:A,">="&DATEVALUE(TEXT($H$1,"yyyy-mm-dd")),Kas!A:A,"<="&DATEVALUE(TEXT($H$2,"yyyy-mm-dd")),Kas!C:C,"MASUK")`],
+    ["Kas keluar (KELUAR)", `=SUMIFS(Kas!F:F,Kas!A:A,">="&DATEVALUE(TEXT($H$1,"yyyy-mm-dd")),Kas!A:A,"<="&DATEVALUE(TEXT($H$2,"yyyy-mm-dd")),Kas!C:C,"KELUAR")`],
+    ["Kehadiran (orang×shift)", `=COUNTIFS(Absensi!A:A,">="&DATEVALUE(TEXT($H$1,"yyyy-mm-dd")),Absensi!A:A,"<="&DATEVALUE(TEXT($H$2,"yyyy-mm-dd")))`],
     ["", ""],
     ["■ TREN 7 HARI (berakhir akhir periode)", "OMZET", "TRX"],
     ...[6, 5, 4, 3, 2, 1, 0].map((off) => a7(off)),
     ["", ""],
     ["■ BULAN DARI AKHIR PERIODE", ""],
-    ["Omzet", `=${sum("J:J", `Transaksi!B:B,${bulanAkhir}`, aktif)}`],
-    ["Transaksi", `=COUNTIFS(Transaksi!B:B,${bulanAkhir},${aktif})`],
-    ["Untung kotor", `=${sum("J:J", `Transaksi!B:B,${bulanAkhir}`, aktif)}-${sum("K:K", `Transaksi!B:B,${bulanAkhir}`, aktif)}`],
+    ["Omzet", `=${sum("J:J", bulanAkhir, aktif)}`],
+    ["Transaksi", `=COUNTIFS(${bulanAkhir},${aktif})`],
+    ["Untung kotor", `=${sum("J:J", bulanAkhir, aktif)}-${sum("K:K", bulanAkhir, aktif)}`],
     ["", ""],
     ["■ SEMUA WAKTU", ""],
     ["Total omzet", `=${sum("J:J", aktif)}`],
@@ -245,11 +245,12 @@ async function _writeHeaderAndDashboard(id: string) {
 }
 
 function a7(off: number): (string | number)[] {
-  const h = `TEXT($H$2-${off},"yyyy-mm-dd")`;
+  const h = `TEXT($H$2-${off},"dd/mm")`;
+  const d = `$H$2-${off}`; // date asli — cocok dgn kolom Transaksi!B (date)
   return [
     `=${h}`,
-    `=SUMIFS(Transaksi!J:J,Transaksi!B:B,${h},Transaksi!L:L,"ACTIVE")`,
-    `=COUNTIFS(Transaksi!B:B,${h},Transaksi!L:L,"ACTIVE")`,
+    `=SUMIFS(Transaksi!J:J,Transaksi!B:B,${d},Transaksi!L:L,"ACTIVE")`,
+    `=COUNTIFS(Transaksi!B:B,${d},Transaksi!L:L,"ACTIVE")`,
   ];
 }
 
@@ -426,7 +427,7 @@ export async function rebuildSheet(): Promise<string | null> {
   await sheets.spreadsheets.values.update({
     spreadsheetId: id,
     range: "'Transaksi'!A1",
-    valueInputOption: "RAW",
+    valueInputOption: "USER_ENTERED", // tanggal jadi DATE asli
     requestBody: { values: [TX_HEADER, ...rows] },
   });
   await _writeHeaderAndDashboard(id);
@@ -465,7 +466,7 @@ export async function syncOpsToSheet(): Promise<void> {
       await sheets.spreadsheets.values.update({
         spreadsheetId: sheetId,
         range: `'${title}'!A1`,
-        valueInputOption: "RAW",
+        valueInputOption: "USER_ENTERED", // hari_usaha jadi DATE asli
         requestBody: { values: [header, ...rows] },
       });
     }
@@ -543,7 +544,7 @@ export async function syncCatalogToSheet(): Promise<void> {
       await sheets.spreadsheets.values.update({
         spreadsheetId: sheetId,
         range: `'${title}'!A1`,
-        valueInputOption: "RAW",
+        valueInputOption: "USER_ENTERED", // hari_usaha jadi DATE asli
         requestBody: { values: [header, ...rows] },
       });
     }

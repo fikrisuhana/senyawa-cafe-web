@@ -130,28 +130,50 @@ async function _writeHeaderAndDashboard(id: string) {
     requestBody: { values: [TX_HEADER] },
   });
 
-  // Dashboard rumus LIVE (kolom Transaksi: B hari_usaha, F metode, J total, K modal, L status).
-  const today = 'TEXT(TODAY(),"yyyy-mm-dd")';
-  const bulan = 'TEXT(TODAY(),"yyyy-mm")&"*"';
+  // Dashboard REKAP INTERAKTIF — pilih tanggal di B4 (kosong = hari ini),
+  // semua rumus ikut tanggal itu (kolom Transaksi: B hari_usaha, F metode,
+  // J total, K modal, L status).
+  // D = tanggal efektif: =IF($B$4="",TODAY(),$B$4)
+  const D = 'IF($B$4="",TODAY(),$B$4)';
+  const hari = (off: number) => `TEXT(${D}-${off},"yyyy-mm-dd")`;
+  const hariIni = hari(0);
+  const bulanTerpilih = `TEXT(${D},"yyyy-mm")&"*"`;
+  const sum = (col: string, ...cond: string[]) => `SUMIFS(Transaksi!${col}:${col},${cond.join(",")})`;
+  const aktif = `Transaksi!L:L,"ACTIVE"`;
   const rows: (string | number)[][] = [
     ["📊 RUANG SENYAWA — LAPORAN POS", ""],
-    ["Terisi otomatis dari server. Jangan diedit manual.", ""],
+    ["Pilih tanggal laporan di sel B4 (kosongkan = hari ini). Selain B4, jangan diedit.", ""],
     ["", ""],
-    ["INDIKATOR", "NILAI"],
-    ["Omzet hari ini", `=SUMIFS(Transaksi!J:J,Transaksi!B:B,${today},Transaksi!L:L,"ACTIVE")`],
-    ["Transaksi hari ini", `=COUNTIFS(Transaksi!B:B,${today},Transaksi!L:L,"ACTIVE")`],
-    ["Untung kotor hari ini", `=SUMIFS(Transaksi!J:J,Transaksi!B:B,${today},Transaksi!L:L,"ACTIVE")-SUMIFS(Transaksi!K:K,Transaksi!B:B,${today},Transaksi!L:L,"ACTIVE")`],
-    ["  — Tunai", `=SUMIFS(Transaksi!J:J,Transaksi!B:B,${today},Transaksi!F:F,"TUNAI",Transaksi!L:L,"ACTIVE")`],
-    ["  — QRIS", `=SUMIFS(Transaksi!J:J,Transaksi!B:B,${today},Transaksi!F:F,"QRIS",Transaksi!L:L,"ACTIVE")`],
-    ["  — Transfer", `=SUMIFS(Transaksi!J:J,Transaksi!B:B,${today},Transaksi!F:F,"TRANSFER",Transaksi!L:L,"ACTIVE")`],
+    ["📅 Tanggal laporan", ""],
     ["", ""],
-    ["Omzet bulan ini", `=SUMIFS(Transaksi!J:J,Transaksi!B:B,${bulan},Transaksi!L:L,"ACTIVE")`],
-    ["Transaksi bulan ini", `=COUNTIFS(Transaksi!B:B,${bulan},Transaksi!L:L,"ACTIVE")`],
-    ["Untung kotor bulan ini", `=SUMIFS(Transaksi!J:J,Transaksi!B:B,${bulan},Transaksi!L:L,"ACTIVE")-SUMIFS(Transaksi!K:K,Transaksi!B:B,${bulan},Transaksi!L:L,"ACTIVE")`],
+    ["■ RINGKASAN HARI TERPILIH", ""],
+    ["Omzet", `=${sum("J:J", `Transaksi!B:B,${hariIni}`, aktif)}`],
+    ["Transaksi", `=COUNTIFS(Transaksi!B:B,${hariIni},${aktif})`],
+    ["Rata-rata / transaksi", `=IFERROR(${sum("J:J", `Transaksi!B:B,${hariIni}`, aktif)}/COUNTIFS(Transaksi!B:B,${hariIni},${aktif}),0)`],
+    ["Modal (HPP)", `=${sum("K:K", `Transaksi!B:B,${hariIni}`, aktif)}`],
+    ["Untung kotor", `=${sum("J:J", `Transaksi!B:B,${hariIni}`, aktif)}-${sum("K:K", `Transaksi!B:B,${hariIni}`, aktif)}`],
+    ["Dibatalkan (VOID)", `=COUNTIFS(Transaksi!B:B,${hariIni},Transaksi!L:L,"VOID")`],
     ["", ""],
-    ["Total omzet (semua)", '=SUMIF(Transaksi!L:L,"ACTIVE",Transaksi!J:J)'],
+    ["■ METODE PEMBAYARAN (hari terpilih)", ""],
+    ["  Tunai", `=${sum("J:J", `Transaksi!B:B,${hariIni}`, 'Transaksi!F:F,"TUNAI"', aktif)}`],
+    ["  QRIS", `=${sum("J:J", `Transaksi!B:B,${hariIni}`, 'Transaksi!F:F,"QRIS"', aktif)}`],
+    ["  Transfer", `=${sum("J:J", `Transaksi!B:B,${hariIni}`, 'Transaksi!F:F,"TRANSFER"', aktif)}`],
+    ["  Lainnya", `=${sum("J:J", `Transaksi!B:B,${hariIni}`, aktif)}-${sum("J:J", `Transaksi!B:B,${hariIni}`, 'Transaksi!F:F,"TUNAI"', aktif)}-${sum("J:J", `Transaksi!B:B,${hariIni}`, 'Transaksi!F:F,"QRIS"', aktif)}-${sum("J:J", `Transaksi!B:B,${hariIni}`, 'Transaksi!F:F,"TRANSFER"', aktif)}`],
+    ["", ""],
+    ["■ TREN 7 HARI (berakhir tanggal terpilih)", "OMZET", "TRX"],
+    ...[6, 5, 4, 3, 2, 1, 0].map(
+      (off) => a7(off),
+    ),
+    ["", ""],
+    ["■ BULAN TERPILIH", ""],
+    ["Omzet", `=${sum("J:J", `Transaksi!B:B,${bulanTerpilih}`, aktif)}`],
+    ["Transaksi", `=COUNTIFS(Transaksi!B:B,${bulanTerpilih},${aktif})`],
+    ["Untung kotor", `=${sum("J:J", `Transaksi!B:B,${bulanTerpilih}`, aktif)}-${sum("K:K", `Transaksi!B:B,${bulanTerpilih}`, aktif)}`],
+    ["", ""],
+    ["■ SEMUA WAKTU", ""],
+    ["Total omzet", `=${sum("J:J", aktif)}`],
     ["Total transaksi", "=COUNTA(Transaksi!A2:A)"],
-    ["Dibatalkan (VOID)", '=COUNTIF(Transaksi!L:L,"VOID")'],
+    ["Total dibatalkan (VOID)", '=COUNTIF(Transaksi!L:L,"VOID")'],
   ];
   await sheets.spreadsheets.values.update({
     spreadsheetId: id,
@@ -159,6 +181,38 @@ async function _writeHeaderAndDashboard(id: string) {
     valueInputOption: "USER_ENTERED",
     requestBody: { values: rows },
   });
+
+  // Format B4 sebagai tanggal biar gampang diklik-kalendernya.
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: id,
+    requestBody: {
+      requests: [
+        {
+          repeatCell: {
+            range: { sheetId: await _dashboardSheetId(id, sheets), startRowIndex: 3, endRowIndex: 4, startColumnIndex: 1, endColumnIndex: 2 },
+            cell: { userEnteredFormat: { numberFormat: { type: "DATE", pattern: "yyyy-mm-dd" } } },
+            fields: "userEnteredFormat.numberFormat",
+          },
+        },
+      ],
+    },
+  });
+}
+
+function a7(off: number): (string | number)[] {
+  const D = 'IF($B$4="",TODAY(),$B$4)';
+  const h = `TEXT(${D}-${off},"yyyy-mm-dd")`;
+  return [
+    `=${h}`,
+    `=SUMIFS(Transaksi!J:J,Transaksi!B:B,${h},Transaksi!L:L,"ACTIVE")`,
+    `=COUNTIFS(Transaksi!B:B,${h},Transaksi!L:L,"ACTIVE")`,
+  ];
+}
+
+async function _dashboardSheetId(id: string, sheets: any): Promise<number> {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: id });
+  const s = (meta.data.sheets || []).find((x: any) => x.properties?.title === "Dashboard");
+  return s?.properties?.sheetId ?? 0;
 }
 
 /** Tambah 1 transaksi ke tab Transaksi. Fire-and-forget (tak ganggu POST transaksi). */

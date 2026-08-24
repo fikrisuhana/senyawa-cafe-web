@@ -173,10 +173,17 @@ export default async function RekapPage({
             <Line key={k} k={k} v={rupiah(v)} />
           ))}
         </Panel>
-        <Panel title="Per kasir">
-          {[...perKasir.entries()].map(([k, v]) => (
-            <Line key={k} k={`${k} (${v.qty})`} v={rupiah(v.total)} />
-          ))}
+        <Panel title="Per kasir (trx & total)">
+          {[...perKasir.entries()]
+            .sort((a, b) => b[1].total - a[1].total)
+            .map(([k, v]) => (
+              <div key={k} className="flex items-center justify-between border-b border-slate-100 py-1.5 text-sm last:border-0">
+                <span className="font-medium">{k}</span>
+                <span className="tabular-nums text-slate-600">
+                  <span className="font-semibold text-brand-700">{v.qty}×</span> · {rupiah(v.total)}
+                </span>
+              </div>
+            ))}
         </Panel>
       </div>
 

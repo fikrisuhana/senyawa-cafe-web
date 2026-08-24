@@ -287,8 +287,11 @@ export async function ensureJadwalTab(): Promise<void> {
       meta = await sheets.spreadsheets.get({ spreadsheetId: id });
     }
 
-    // Kolom generik sederhana: Tanggal | Shift 1 | Shift 2 (permintaan owner).
-    const shifts = ["Shift 1", "Shift 2"];
+    // Kolom ikut NAMA SHIFT dari Setting web (mis. Pagi, Malam).
+    const shifts = ((await getSetting("shifts")) || "Pagi,Malam")
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
     const header = ["Tanggal", ...shifts];
 
     // Kolom tanggal: formula per baris (mengikuti bulan di B1). Baris 4..34 = tgl 1..31.

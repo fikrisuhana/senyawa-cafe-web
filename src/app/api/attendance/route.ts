@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { syncOpsToSheet } from "@/lib/gsheet";
 import { prisma } from "@/lib/db";
 import { getAuthFromRequest } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
@@ -35,6 +36,7 @@ export async function POST(req: Request) {
 
   if (!shouldPresent) {
     if (existing) await prisma.attendance.delete({ where: { id: existing.id } });
+    void syncOpsToSheet();
     return NextResponse.json({ ok: true, present: false });
   }
   if (!existing) {
@@ -48,5 +50,6 @@ export async function POST(req: Request) {
       },
     });
   }
+  void syncOpsToSheet(); // mirror ke Google Sheet (fire-and-forget)
   return NextResponse.json({ ok: true, present: true });
 }

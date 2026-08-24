@@ -160,6 +160,11 @@ async function _writeHeaderAndDashboard(id: string) {
     ["  Transfer", `=${sum("J:J", `Transaksi!B:B,${hariIni}`, 'Transaksi!F:F,"TRANSFER"', aktif)}`],
     ["  Lainnya", `=${sum("J:J", `Transaksi!B:B,${hariIni}`, aktif)}-${sum("J:J", `Transaksi!B:B,${hariIni}`, 'Transaksi!F:F,"TUNAI"', aktif)}-${sum("J:J", `Transaksi!B:B,${hariIni}`, 'Transaksi!F:F,"QRIS"', aktif)}-${sum("J:J", `Transaksi!B:B,${hariIni}`, 'Transaksi!F:F,"TRANSFER"', aktif)}`],
     ["", ""],
+    ["■ KAS & ABSENSI (hari terpilih)", ""],
+    ["Kas masuk (MASUK)", `=SUMIFS(Kas!F:F,Kas!A:A,${hariIni},Kas!C:C,"MASUK")`],
+    ["Kas keluar (KELUAR)", `=SUMIFS(Kas!F:F,Kas!A:A,${hariIni},Kas!C:C,"KELUAR")`],
+    ["Kehadiran (orang×shift)", `=COUNTIF(Absensi!A:A,${hariIni})`],
+    ["", ""],
     ["■ TREN 7 HARI (berakhir tanggal terpilih)", "OMZET", "TRX"],
     ...[6, 5, 4, 3, 2, 1, 0].map(
       (off) => a7(off),
@@ -269,7 +274,83 @@ export async function rebuildSheet(): Promise<string | null> {
   });
   await _writeHeaderAndDashboard(id);
   await syncCatalogToSheet();
+  await syncOpsToSheet();
   return id;
+}
+
+/**
+ * Mirror OPERASIONAL (kas, absensi, restok) dari Postgres ke tab Sheet.
+ * Ditulis ulang penuh — dipanggil tiap ada perubahan (fire-and-forget) & rebuild.
+ */
+export async function syncOpsToSheet(): Promise<void> {
+  try {
+    if (!sheetEnabled()) return;
+    const id = await getOrCreateSheet();
+    if (!id) return;
+    const auth = jwt();
+    if (!auth) return;
+    const sheets = google.sheets({ version: "v4", auth });
+    const sheetId: string = id;
+
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: id });
+    const titles = (meta.data.sheets || []).map((s) => s.properties?.title || "");
+    const need = ["Kas", "Absensi", "Restok_Log"].filter((t) => !titles.includes(t));
+    if (need.length) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: id,
+        requestBody: { requests: need.map((t) => ({ addSheet: { properties: { title: t } } })) },
+      });
+    }
+
+    async function writeTab(title: string, header: string[], rows: (string | number | null)[][]) {
+      await sheets.spreadsheets.values.clear({ spreadsheetId: sheetId, range: `'${title}'!A2:Z` });
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: sheetId,
+        range: `'${title}'!A1`,
+        valueInputOption: "RAW",
+        requestBody: { values: [header, ...rows] },
+      });
+    }
+
+    const [kas, absen, restok] = await Promise.all([
+      prisma.cashEntry.findMany({ orderBy: { createdAt: "asc" } }),
+      prisma.attendance.findMany({ orderBy: { clockIn: "asc" } }),
+      prisma.stockMovement.findMany({
+        where: { type: { in: ["RESTOCK", "IMPORT", "ADJUST"] } },
+        orderBy: { createdAt: "asc" },
+        include: { packaging: true },
+      }),
+    ]);
+
+    await writeTab(
+      "Kas",
+      ["hari_usaha", "waktu", "tipe", "kategori", "keterangan", "nominal", "oleh"],
+      kas.map((k) => [
+        k.businessDate, new Date(k.createdAt).toISOString(), k.type, k.category,
+        k.note || "", k.amount, k.userName || "",
+      ]),
+    );
+
+    await writeTab(
+      "Absensi",
+      ["hari_usaha", "karyawan", "shift", "dicatat_oleh", "waktu"],
+      absen.map((a) => [
+        a.businessDate, a.employeeName, a.shift || "", a.recordedBy || "",
+        new Date(a.clockIn).toISOString(),
+      ]),
+    );
+
+    await writeTab(
+      "Restok_Log",
+      ["waktu", "bahan", "tipe", "perubahan", "stok_sesudah", "oleh", "catatan"],
+      restok.map((r) => [
+        new Date(r.createdAt).toISOString(), r.packaging.name, r.type, r.delta,
+        r.after, r.userName || "", r.note || "",
+      ]),
+    );
+  } catch (e) {
+    console.error("syncOpsToSheet gagal:", (e as Error).message);
+  }
 }
 
 /**

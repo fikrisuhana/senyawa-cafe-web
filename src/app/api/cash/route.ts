@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { syncOpsToSheet } from "@/lib/gsheet";
 import { prisma } from "@/lib/db";
 import { getAuthFromRequest } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
@@ -40,5 +41,6 @@ export async function POST(req: Request) {
       clientId,
     },
   });
+  void syncOpsToSheet(); // mirror ke Google Sheet (fire-and-forget)
   return NextResponse.json({ ok: true, id: e.id });
 }

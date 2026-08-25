@@ -18,7 +18,9 @@ export type BelanjaRow = {
 };
 
 /// Form catat belanja barang owner (per barang) — otomatis jadi kas keluar.
-export default function BelanjaClient({ rows }: { rows: BelanjaRow[] }) {
+export type BahanOpt = { id: string; name: string; unit: string; buyUnit: string | null; buyFactor: number };
+
+export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[]; bahans?: BahanOpt[] }) {
   const router = useRouter();
   const [itemName, setItemName] = useState("");
   const [qty, setQty] = useState("1");
@@ -26,6 +28,9 @@ export default function BelanjaClient({ rows }: { rows: BelanjaRow[] }) {
   const [unitPrice, setUnitPrice] = useState("");
   const [note, setNote] = useState("");
   const [cat, setCat] = useState("BELANJA");
+  const [bahanId, setBahanId] = useState("");
+  const [bahanQty, setBahanQty] = useState("");
+  const [bahanMode, setBahanMode] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -43,7 +48,10 @@ export default function BelanjaClient({ rows }: { rows: BelanjaRow[] }) {
     const res = await fetch("/api/purchases", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemName, qty: q, unitPrice: harga, unit, note, category: cat }),
+      body: JSON.stringify({
+        itemName, qty: q, unitPrice: harga, unit, note, category: cat,
+        ...(bahanId && Number(bahanQty) > 0 ? { restockPackagingId: bahanId, restockQty: Number(bahanQty), restockMode: bahanMode || "buy" } : {}),
+      }),
     });
     const body = await res.json().catch(() => ({}));
     setBusy(false);
@@ -56,7 +64,9 @@ export default function BelanjaClient({ rows }: { rows: BelanjaRow[] }) {
     setUnit("");
     setUnitPrice("");
     setNote("");
-    setMsg(`✅ Tercatat — ${rupiah(body.total)} (biaya owner, bukan dari laci)`);
+    setMsg(`✅ Tercatat — ${rupiah(body.total)} (biaya owner, bukan dari laci)${bahanId && Number(bahanQty) > 0 ? " + stok bahan bertambah" : ""}`);
+    setBahanId("");
+    setBahanQty("");
     router.refresh();
   }
 
@@ -111,6 +121,50 @@ export default function BelanjaClient({ rows }: { rows: BelanjaRow[] }) {
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
+        {cat === "BELANJA" && bahans.length > 0 && (
+          <div className="col-span-2 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 p-2 text-xs sm:col-span-7">
+            <span className="font-medium text-slate-600">📦 Sekalian tambah stok bahan?</span>
+            <select
+              className="input h-8 w-auto flex-1 min-w-[140px] text-xs"
+              value={bahanId}
+              onChange={(e) => {
+                setBahanId(e.target.value);
+                const b = bahans.find((x) => x.id === e.target.value);
+                setBahanMode(b?.buyUnit ? "buy" : "base");
+              }}
+            >
+              <option value="">— tidak usah —</option>
+              {bahans.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+            {bahanId && (
+              <>
+                <input
+                  className="input h-8 w-20 text-xs"
+                  type="number"
+                  min={0}
+                  placeholder="qty"
+                  value={bahanQty}
+                  onChange={(e) => setBahanQty(e.target.value)}
+                />
+                {(() => {
+                  const b = bahans.find((x) => x.id === bahanId)!;
+                  return b.buyUnit ? (
+                    <select className="input h-8 w-auto text-xs" value={bahanMode} onChange={(e) => setBahanMode(e.target.value)}>
+                      <option value="buy">{b.buyUnit} (×{b.buyFactor} {b.unit})</option>
+                      <option value="base">{b.unit}</option>
+                    </select>
+                  ) : (
+                    <span className="text-slate-500">{b.unit}</span>
+                  );
+                })()}
+              </>
+            )}
+          </div>
+        )}
       </form>
       {msg && <p className="text-xs text-slate-600">{msg}</p>}
 

@@ -76,7 +76,10 @@ model VariantOptionStock {
 model Packaging {
   id           String               @id @default(cuid())
   name         String               @unique
-  unit         String               @default("pcs")
+  unit         String               @default("pcs") // SATUAN DASAR (terkecil): ml/gram/pcs
+  // Satuan BELI + konversi: susu beli "liter" faktor 1000 → input 2 liter = +2000 ml.
+  buyUnit      String?
+  buyFactor    Int                  @default(1)
   stock        Int                  @default(0)
   minStock     Int                  @default(0)
   updatedAt    DateTime             @updatedAt

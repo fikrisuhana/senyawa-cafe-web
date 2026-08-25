@@ -21,7 +21,7 @@ export default async function KeuanganPage({
   const period = resolvePeriod(sp, settings.dayCutoffHour);
   const bdFilter = period.filter;
 
-  const [txs, entries, purchases] = await Promise.all([
+  const [txs, entries, purchases, packs] = await Promise.all([
     prisma.transaction.findMany({
       where: { businessDate: bdFilter, status: { not: "VOID" } },
       select: { total: true, payment: true, businessDate: true },
@@ -31,6 +31,10 @@ export default async function KeuanganPage({
       orderBy: { createdAt: "desc" },
     }),
     prisma.purchase.findMany({ where: { businessDate: bdFilter }, orderBy: { createdAt: "desc" } }),
+    prisma.packaging.findMany({
+      select: { id: true, name: true, unit: true, buyUnit: true, buyFactor: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   const penjualan = txs.reduce((s, t) => s + t.total, 0);
@@ -86,7 +90,7 @@ export default async function KeuanganPage({
         <Stat label="— Gaji" value={rupiah(purchases.filter((p2) => p2.category === "GAJI").reduce((s2, p2) => s2 + p2.total, 0))} />
         <Stat label="— Lainnya" value={rupiah(purchases.filter((p2) => p2.category === "LAIN").reduce((s2, p2) => s2 + p2.total, 0))} />
       </div>
-      <BelanjaClient rows={purchases} />
+      <BelanjaClient rows={purchases} bahans={packs} />
 
       <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
         <CashClient defaultDate={today} />

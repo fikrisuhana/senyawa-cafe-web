@@ -18,6 +18,8 @@ export default async function StokPage() {
     id: p.id,
     name: p.name,
     unit: p.unit,
+    buyUnit: p.buyUnit,
+    buyFactor: p.buyFactor,
     stock: p.stock,
     minStock: p.minStock,
     low: p.stock <= p.minStock,

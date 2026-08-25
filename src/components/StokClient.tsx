@@ -7,6 +7,8 @@ export type PackRow = {
   id: string;
   name: string;
   unit: string;
+  buyUnit: string | null;
+  buyFactor: number;
   stock: number;
   minStock: number;
   low: boolean;
@@ -19,6 +21,7 @@ export default function StokClient({ rows }: { rows: PackRow[] }) {
   const [minStock, setMinStock] = useState("0");
   const [importMsg, setImportMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [edit, setEdit] = useState<PackRow | null>(null);
 
   async function addPack(e: React.FormEvent) {
     e.preventDefault();
@@ -59,6 +62,51 @@ export default function StokClient({ rows }: { rows: PackRow[] }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: p.id, setTo: target, note: "Set manual" }),
     });
+    router.refresh();
+  }
+
+  /// Restok dalam SATUAN BELI (mis. liter) — server konversi ke satuan dasar.
+  async function restock(p: PackRow) {
+    const label = p.buyUnit || p.unit;
+    const val = prompt(
+      `Restok "${p.name}" — masuk berapa ${label}?` +
+        (p.buyUnit && p.buyFactor > 1 ? `
+(1 ${p.buyUnit} = ${p.buyFactor} ${p.unit})` : ""),
+      ""
+    );
+    if (val === null) return;
+    const qty = Number(val);
+    if (!Number.isFinite(qty) || qty <= 0) return;
+    const res = await fetch("/api/admin/packaging", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: p.id, delta: qty, mode: p.buyUnit ? "buy" : "base" }),
+    });
+    if (!res.ok) alert("Gagal restok");
+    router.refresh();
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!edit) return;
+    const res = await fetch("/api/admin/packaging", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: edit.id,
+        name: edit.name,
+        unit: edit.unit,
+        buyUnit: edit.buyUnit || "",
+        buyFactor: edit.buyFactor,
+        minStock: edit.minStock,
+      }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert(j.error || "Gagal menyimpan");
+      return;
+    }
+    setEdit(null);
     router.refresh();
   }
 
@@ -149,12 +197,26 @@ export default function StokClient({ rows }: { rows: PackRow[] }) {
                       menipis
                     </span>
                   )}
-                  <div className="text-xs text-slate-400">{p.unit}</div>
+                  <div className="text-xs text-slate-400">
+                    {p.unit}
+                    {p.buyUnit ? (
+                      <span className="text-slate-500">
+                        {" "}
+                        · beli: {p.buyUnit} (×{p.buyFactor})
+                      </span>
+                    ) : null}
+                  </div>
                 </td>
                 <td className="td text-right font-semibold">{p.stock}</td>
                 <td className="td text-right text-slate-500">{p.minStock}</td>
                 <td className="td text-right">
-                  <button onClick={() => adjust(p)} className="text-brand-700 hover:underline">
+                  <button onClick={() => restock(p)} className="font-medium text-emerald-700 hover:underline">
+                    + Restok
+                  </button>
+                  <button onClick={() => setEdit(p)} className="ml-3 text-slate-600 hover:underline">
+                    Edit
+                  </button>
+                  <button onClick={() => adjust(p)} className="ml-3 text-brand-700 hover:underline">
                     +/−
                   </button>
                   <button onClick={() => setStok(p)} className="ml-3 text-slate-600 hover:underline">
@@ -176,6 +238,57 @@ export default function StokClient({ rows }: { rows: PackRow[] }) {
           </tbody>
         </table>
       </div>
+
+      {edit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <form onSubmit={saveEdit} className="card w-full max-w-md space-y-3">
+            <h2 className="font-bold">Edit bahan — {edit.name}</h2>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="label">Nama</label>
+                <input className="input" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
+              </div>
+              <div>
+                <label className="label">Satuan DASAR (terkecil)</label>
+                <input className="input" value={edit.unit} onChange={(e) => setEdit({ ...edit, unit: e.target.value })} placeholder="ml / gram / pcs" />
+              </div>
+              <div>
+                <label className="label">Satuan BELI (opsional)</label>
+                <input className="input" value={edit.buyUnit || ""} onChange={(e) => setEdit({ ...edit, buyUnit: e.target.value })} placeholder="liter / kg / dus" />
+              </div>
+              <div>
+                <label className="label">1 satuan beli = ? satuan dasar</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  value={edit.buyFactor}
+                  onChange={(e) => setEdit({ ...edit, buyFactor: Number(e.target.value) || 1 })}
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="label">Stok minimum (satuan dasar)</label>
+                <input
+                  className="input"
+                  type="number"
+                  value={edit.minStock}
+                  onChange={(e) => setEdit({ ...edit, minStock: Number(e.target.value) || 0 })}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-slate-500">
+              Contoh susu: dasar <code>ml</code>, beli <code>liter</code>, faktor <code>1000</code> →
+              restok "2 liter" = stok +2000 ml. Resep varian tetap ditulis dalam satuan dasar (mis. 200 ml).
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-ghost" onClick={() => setEdit(null)}>
+                Batal
+              </button>
+              <button className="btn-primary">Simpan</button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

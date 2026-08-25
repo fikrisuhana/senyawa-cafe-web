@@ -38,6 +38,31 @@ export async function POST(req: Request) {
     },
   });
 
-  void syncOpsToSheet(); // mirror ke Google Sheet (tab Belanja)
+  // Opsional: sekalian TAMBAH STOK bahan (mis. beli susu 2 liter → stok +2000 ml).
+  if (b.restockPackagingId) {
+    const pack = await prisma.packaging.findUnique({ where: { id: String(b.restockPackagingId) } });
+    const rQty = Math.round(Number(b.restockQty) || 0);
+    if (pack && rQty > 0) {
+      const factor = b.restockMode === "buy" ? Math.max(1, pack.buyFactor || 1) : 1;
+      const delta = rQty * factor;
+      const after = Math.max(0, pack.stock + delta);
+      await prisma.$transaction([
+        prisma.packaging.update({ where: { id: pack.id }, data: { stock: after } }),
+        prisma.stockMovement.create({
+          data: {
+            packagingId: pack.id,
+            type: "RESTOCK",
+            delta,
+            before: pack.stock,
+            after,
+            note: `Belanja: ${itemName}`,
+            userName: user.name,
+          },
+        }),
+      ]);
+    }
+  }
+
+  void syncOpsToSheet(); // mirror ke Google Sheet (tab Belanja + Restok_Log)
   return NextResponse.json({ ok: true, id: p.id, total });
 }

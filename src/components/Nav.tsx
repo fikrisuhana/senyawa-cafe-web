@@ -23,6 +23,7 @@ const adminMore: LinkItem[] = [
   { href: "/admin/menu", label: "Menu", icon: "🍽️" },
   { href: "/admin/voucher", label: "Voucher", icon: "🎟️" },
   { href: "/admin/stok", label: "Stok", icon: "📦" },
+  { href: "/admin/keuangan", label: "Keuangan", icon: "💰" },
   { href: "/admin/absensi", label: "Absensi", icon: "🗓️" },
   { href: "/admin/users", label: "User", icon: "👥" },
   { href: "/admin/pengaturan", label: "Setelan", icon: "⚙️" },

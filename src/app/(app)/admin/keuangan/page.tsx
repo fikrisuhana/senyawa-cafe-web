@@ -76,7 +76,16 @@ export default async function KeuanganPage({
         uang fisik saat tutup (QRIS/transfer tidak dihitung sebagai tunai).
       </p>
 
-      {/* Total belanja barang (periode ini) */}
+      {/* Biaya owner (belanja/gaji — uang owner, bukan laci) */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="Biaya owner (periode)" value={rupiah(purchases.reduce((s2, p2) => s2 + p2.total, 0))} />
+        <Stat
+          label="— Belanja"
+          value={rupiah(purchases.filter((p2) => p2.category === "BELANJA" || !p2.category).reduce((s2, p2) => s2 + p2.total, 0))}
+        />
+        <Stat label="— Gaji" value={rupiah(purchases.filter((p2) => p2.category === "GAJI").reduce((s2, p2) => s2 + p2.total, 0))} />
+        <Stat label="— Lainnya" value={rupiah(purchases.filter((p2) => p2.category === "LAIN").reduce((s2, p2) => s2 + p2.total, 0))} />
+      </div>
       <BelanjaClient rows={purchases} />
 
       <div className="grid gap-4 lg:grid-cols-[300px_1fr]">

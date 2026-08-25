@@ -7,6 +7,7 @@ import { rupiah } from "@/lib/format";
 export type BelanjaRow = {
   id: string;
   businessDate: string;
+  category: string;
   itemName: string;
   qty: number;
   unit: string | null;
@@ -24,6 +25,7 @@ export default function BelanjaClient({ rows }: { rows: BelanjaRow[] }) {
   const [unit, setUnit] = useState("");
   const [unitPrice, setUnitPrice] = useState("");
   const [note, setNote] = useState("");
+  const [cat, setCat] = useState("BELANJA");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -41,7 +43,7 @@ export default function BelanjaClient({ rows }: { rows: BelanjaRow[] }) {
     const res = await fetch("/api/purchases", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemName, qty: q, unitPrice: harga, unit, note }),
+      body: JSON.stringify({ itemName, qty: q, unitPrice: harga, unit, note, category: cat }),
     });
     const body = await res.json().catch(() => ({}));
     setBusy(false);
@@ -54,19 +56,24 @@ export default function BelanjaClient({ rows }: { rows: BelanjaRow[] }) {
     setUnit("");
     setUnitPrice("");
     setNote("");
-    setMsg(`✅ Tercatat — ${rupiah(body.total)} (ikut kas keluar)`);
+    setMsg(`✅ Tercatat — ${rupiah(body.total)} (biaya owner, bukan dari laci)`);
     router.refresh();
   }
 
   return (
     <div className="card space-y-3">
       <div>
-        <h2 className="font-bold">🛒 Belanja Barang</h2>
+        <h2 className="font-bold">💼 Biaya Owner (Belanja / Gaji)</h2>
         <p className="text-xs text-slate-500">
-          Catat per barang. Otomatis jadi <b>Kas Keluar (kategori Belanja)</b> — saldo laci tetap akurat.
+          Uang owner — <b>tidak dari laci kasir</b>, tidak mengurangi saldo kas. Terpisah di laporan.
         </p>
       </div>
-      <form onSubmit={submit} className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+      <form onSubmit={submit} className="grid grid-cols-2 gap-2 sm:grid-cols-7">
+        <select className="input" value={cat} onChange={(e) => setCat(e.target.value)}>
+          <option value="BELANJA">Belanja bulanan</option>
+          <option value="GAJI">Gaji karyawan</option>
+          <option value="LAIN">Lainnya</option>
+        </select>
         <input
           className="input col-span-2 sm:col-span-2"
           placeholder="Nama barang (mis. Biji kopi 1kg)"
@@ -99,7 +106,7 @@ export default function BelanjaClient({ rows }: { rows: BelanjaRow[] }) {
           {busy ? "…" : `Catat${harga > 0 ? ` · ${rupiah(q * harga)}` : ""}`}
         </button>
         <input
-          className="input col-span-2 sm:col-span-6"
+          className="input col-span-2 sm:col-span-7"
           placeholder="Catatan (opsional — di mana belanja, dsb)"
           value={note}
           onChange={(e) => setNote(e.target.value)}
@@ -111,6 +118,9 @@ export default function BelanjaClient({ rows }: { rows: BelanjaRow[] }) {
         {rows.map((r) => (
           <div key={r.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
             <div className="min-w-0">
+              <span className="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                {r.category === "GAJI" ? "GAJI" : r.category === "LAIN" ? "LAIN" : "BELANJA"}
+              </span>
               <span className="font-medium">{r.itemName}</span>
               <span className="text-slate-400">
                 {" "}

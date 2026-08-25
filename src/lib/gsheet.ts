@@ -167,7 +167,7 @@ async function _writeHeaderAndDashboard(id: string) {
     ["Kas masuk (MASUK)", `=SUMIFS(Kas!F:F,Kas!A:A,">="&DATEVALUE(TEXT($H$1,"yyyy-mm-dd")),Kas!A:A,"<="&DATEVALUE(TEXT($H$2,"yyyy-mm-dd")),Kas!C:C,"MASUK")`],
     ["Kas keluar (KELUAR)", `=SUMIFS(Kas!F:F,Kas!A:A,">="&DATEVALUE(TEXT($H$1,"yyyy-mm-dd")),Kas!A:A,"<="&DATEVALUE(TEXT($H$2,"yyyy-mm-dd")),Kas!C:C,"KELUAR")`],
     ["Kehadiran (orang×shift)", `=COUNTIFS(Absensi!A:A,">="&DATEVALUE(TEXT($H$1,"yyyy-mm-dd")),Absensi!A:A,"<="&DATEVALUE(TEXT($H$2,"yyyy-mm-dd")))`],
-    ["Belanja barang", `=SUMIFS(Belanja!G:G,Belanja!A:A,">="&DATEVALUE(TEXT($H$1,"yyyy-mm-dd")),Belanja!A:A,"<="&DATEVALUE(TEXT($H$2,"yyyy-mm-dd")))`],
+    ["Biaya owner (belanja+gaji)", `=SUMIFS(Belanja!H:H,Belanja!A:A,">="&DATEVALUE(TEXT($H$1,"yyyy-mm-dd")),Belanja!A:A,"<="&DATEVALUE(TEXT($H$2,"yyyy-mm-dd")))`],
     ["", ""],
     ["■ TREN 7 HARI (berakhir akhir periode)", "OMZET", "TRX"],
     ...[6, 5, 4, 3, 2, 1, 0].map((off) => a7(off)),
@@ -485,9 +485,9 @@ export async function syncOpsToSheet(): Promise<void> {
 
     await writeTab(
       "Belanja",
-      ["hari_usaha", "waktu", "barang", "qty", "satuan", "harga_satuan", "total", "oleh", "catatan"],
+      ["hari_usaha", "waktu", "kategori", "barang", "qty", "satuan", "harga_satuan", "total", "oleh", "catatan"],
       belanja.map((b) => [
-        b.businessDate, new Date(b.createdAt).toISOString(), b.itemName, b.qty,
+        b.businessDate, new Date(b.createdAt).toISOString(), b.category || "BELANJA", b.itemName, b.qty,
         b.unit || "", b.unitPrice, b.total, b.userName || "", b.note || "",
       ]),
     );

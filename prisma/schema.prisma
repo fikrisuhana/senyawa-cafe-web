@@ -219,11 +219,12 @@ model Setting {
   value String
 }
 
-// Belanja barang owner (belanja bahan/perlengkapan) — detail per barang.
-// Otomatis juga membuat CashEntry KELUAR (kategori "Belanja") biar saldo laci akurat.
+// BIAYA OWNER (belanja bulanan, gaji karyawan, dll) — UANG OWNER, BUKAN DARI LACI.
+// TIDAK membuat CashEntry — terpisah dari kas laci kasir.
 model Purchase {
   id           String   @id @default(cuid())
   businessDate String
+  category     String   @default("BELANJA") // BELANJA | GAJI | LAIN
   itemName     String
   qty          Int      @default(1)
   unit         String?

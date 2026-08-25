@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { syncCatalogToSheet } from "@/lib/gsheet";
+import { syncCatalogToSheet, syncOpsToSheet } from "@/lib/gsheet";
 
 export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}));
@@ -23,7 +23,17 @@ export async function PUT(req: Request) {
   if (typeof b.name === "string") data.name = b.name.trim();
   if (typeof b.active === "boolean") data.active = b.active;
   await prisma.employee.update({ where: { id: b.id }, data });
+
+  // Nama tersalin (denormalized) di riwayat absensi — ikutkan rename supaya
+  // matriks absen/Jadwal tidak menampilkan nama lama.
+  if (data.name) {
+    await prisma.attendance.updateMany({
+      where: { employeeId: b.id },
+      data: { employeeName: data.name },
+    });
+  }
   void syncCatalogToSheet(); // mirror katalog ke Sheet (fire-and-forget)
+  void syncOpsToSheet(); // absensi & jadwal di Sheet ikut nama baru
   return NextResponse.json({ ok: true });
 }
 

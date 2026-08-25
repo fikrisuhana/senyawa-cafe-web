@@ -31,6 +31,9 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
   const [bahanId, setBahanId] = useState("");
   const [bahanQty, setBahanQty] = useState("");
   const [bahanMode, setBahanMode] = useState("");
+  const [nbUnit, setNbUnit] = useState("pcs");
+  const [nbBuyUnit, setNbBuyUnit] = useState("");
+  const [nbBuyFactor, setNbBuyFactor] = useState("1");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -50,7 +53,15 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         itemName, qty: q, unitPrice: harga, unit, note, category: cat,
-        ...(bahanId && Number(bahanQty) > 0 ? { restockPackagingId: bahanId, restockQty: Number(bahanQty), restockMode: bahanMode || "buy" } : {}),
+        ...(bahanId && Number(bahanQty) > 0
+          ? bahanId === "__new__"
+            ? {
+                restockQty: Number(bahanQty),
+                restockMode: nbBuyUnit ? "buy" : "base",
+                newBahan: { name: itemName, unit: nbUnit, buyUnit: nbBuyUnit, buyFactor: Number(nbBuyFactor) || 1 },
+              }
+            : { restockPackagingId: bahanId, restockQty: Number(bahanQty), restockMode: bahanMode || "buy" }
+          : {}),
       }),
     });
     const body = await res.json().catch(() => ({}));
@@ -67,6 +78,8 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
     setMsg(`✅ Tercatat — ${rupiah(body.total)} (biaya owner, bukan dari laci)${bahanId && Number(bahanQty) > 0 ? " + stok bahan bertambah" : ""}`);
     setBahanId("");
     setBahanQty("");
+    setNbBuyUnit("");
+    setNbBuyFactor("1");
     router.refresh();
   }
 
@@ -139,6 +152,7 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
                   {b.name}
                 </option>
               ))}
+              <option value="__new__">➕ Barang baru (buat bahan)…</option>
             </select>
             {bahanId && (
               <>
@@ -150,7 +164,23 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
                   value={bahanQty}
                   onChange={(e) => setBahanQty(e.target.value)}
                 />
-                {(() => {
+                {bahanId === "__new__" ? (
+                  <span className="flex flex-wrap items-center gap-1">
+                    <input className="input h-8 w-16 text-xs" placeholder="satuan" value={nbUnit} onChange={(e) => setNbUnit(e.target.value)} />
+                    <input className="input h-8 w-16 text-xs" placeholder="beli (ops.)" value={nbBuyUnit} onChange={(e) => setNbBuyUnit(e.target.value)} />
+                    {nbBuyUnit && (
+                      <input
+                        className="input h-8 w-16 text-xs"
+                        type="number"
+                        min={1}
+                        title={`1 ${nbBuyUnit} = berapa ${nbUnit}?`}
+                        placeholder="×?"
+                        value={nbBuyFactor}
+                        onChange={(e) => setNbBuyFactor(e.target.value)}
+                      />
+                    )}
+                  </span>
+                ) : (() => {
                   const b = bahans.find((x) => x.id === bahanId)!;
                   return b.buyUnit ? (
                     <select className="input h-8 w-auto text-xs" value={bahanMode} onChange={(e) => setBahanMode(e.target.value)}>
@@ -161,6 +191,9 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
                     <span className="text-slate-500">{b.unit}</span>
                   );
                 })()}
+                {bahanId === "__new__" && itemName.trim() === "" && (
+                  <span className="text-orange-600">isi nama barang dulu (dipakai sbg nama bahan)</span>
+                )}
               </>
             )}
           </div>

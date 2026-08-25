@@ -39,11 +39,36 @@ export async function POST(req: Request) {
   });
 
   // Opsional: sekalian TAMBAH STOK bahan (mis. beli susu 2 liter → stok +2000 ml).
-  if (b.restockPackagingId) {
-    const pack = await prisma.packaging.findUnique({ where: { id: String(b.restockPackagingId) } });
+  // `newBahan` = barang BARU (belum ada di daftar) → dibuat dulu, lalu di-restok.
+  let pack = null;
+  let factorOverride = 1;
+  if (b.newBahan) {
+    const nbName = String(b.newBahan.name || itemName).trim().slice(0, 60);
+    if (nbName) {
+      pack =
+        (await prisma.packaging.findUnique({ where: { name: nbName } })) ??
+        (await prisma.packaging.create({
+          data: {
+            name: nbName,
+            unit: String(b.newBahan.unit || "pcs").slice(0, 20),
+            buyUnit: b.newBahan.buyUnit ? String(b.newBahan.buyUnit).slice(0, 20) : null,
+            buyFactor: Math.max(1, Math.round(Number(b.newBahan.buyFactor) || 1)),
+            stock: 0,
+          },
+        }));
+      factorOverride = Math.max(1, Math.round(Number(b.newBahan.buyFactor) || 1));
+    }
+  } else if (b.restockPackagingId) {
+    pack = await prisma.packaging.findUnique({ where: { id: String(b.restockPackagingId) } });
+  }
+  {
     const rQty = Math.round(Number(b.restockQty) || 0);
     if (pack && rQty > 0) {
-      const factor = b.restockMode === "buy" ? Math.max(1, pack.buyFactor || 1) : 1;
+      const factor = b.newBahan
+        ? (b.restockMode === "buy" ? factorOverride : 1)
+        : b.restockMode === "buy"
+          ? Math.max(1, pack.buyFactor || 1)
+          : 1;
       const delta = rQty * factor;
       const after = Math.max(0, pack.stock + delta);
       await prisma.$transaction([

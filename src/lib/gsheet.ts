@@ -167,6 +167,7 @@ async function _writeHeaderAndDashboard(id: string) {
     ["Kas masuk (MASUK)", `=SUMIFS(Kas!F:F,Kas!A:A,">="&DATEVALUE(TEXT($H$1,"yyyy-mm-dd")),Kas!A:A,"<="&DATEVALUE(TEXT($H$2,"yyyy-mm-dd")),Kas!C:C,"MASUK")`],
     ["Kas keluar (KELUAR)", `=SUMIFS(Kas!F:F,Kas!A:A,">="&DATEVALUE(TEXT($H$1,"yyyy-mm-dd")),Kas!A:A,"<="&DATEVALUE(TEXT($H$2,"yyyy-mm-dd")),Kas!C:C,"KELUAR")`],
     ["Kehadiran (orang×shift)", `=COUNTIFS(Absensi!A:A,">="&DATEVALUE(TEXT($H$1,"yyyy-mm-dd")),Absensi!A:A,"<="&DATEVALUE(TEXT($H$2,"yyyy-mm-dd")))`],
+    ["Belanja barang", `=SUMIFS(Belanja!G:G,Belanja!A:A,">="&DATEVALUE(TEXT($H$1,"yyyy-mm-dd")),Belanja!A:A,"<="&DATEVALUE(TEXT($H$2,"yyyy-mm-dd")))`],
     ["", ""],
     ["■ TREN 7 HARI (berakhir akhir periode)", "OMZET", "TRX"],
     ...[6, 5, 4, 3, 2, 1, 0].map((off) => a7(off)),
@@ -435,7 +436,7 @@ export async function syncOpsToSheet(): Promise<void> {
 
     const meta = await sheets.spreadsheets.get({ spreadsheetId: id });
     const titles = (meta.data.sheets || []).map((s) => s.properties?.title || "");
-    const need = ["Kas", "Absensi", "Restok_Log"].filter((t) => !titles.includes(t));
+    const need = ["Kas", "Absensi", "Restok_Log", "Belanja"].filter((t) => !titles.includes(t));
     if (need.length) {
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId: id,
@@ -453,7 +454,7 @@ export async function syncOpsToSheet(): Promise<void> {
       });
     }
 
-    const [kas, absen, restok] = await Promise.all([
+    const [kas, absen, restok, belanja] = await Promise.all([
       prisma.cashEntry.findMany({ orderBy: { createdAt: "asc" } }),
       prisma.attendance.findMany({ orderBy: { clockIn: "asc" } }),
       prisma.stockMovement.findMany({
@@ -461,6 +462,7 @@ export async function syncOpsToSheet(): Promise<void> {
         orderBy: { createdAt: "asc" },
         include: { packaging: true },
       }),
+      prisma.purchase.findMany({ orderBy: { createdAt: "asc" } }),
     ]);
 
     await writeTab(
@@ -478,6 +480,15 @@ export async function syncOpsToSheet(): Promise<void> {
       absen.map((a) => [
         a.businessDate, a.employeeName, a.shift || "", a.recordedBy || "",
         new Date(a.clockIn).toISOString(),
+      ]),
+    );
+
+    await writeTab(
+      "Belanja",
+      ["hari_usaha", "waktu", "barang", "qty", "satuan", "harga_satuan", "total", "oleh", "catatan"],
+      belanja.map((b) => [
+        b.businessDate, new Date(b.createdAt).toISOString(), b.itemName, b.qty,
+        b.unit || "", b.unitPrice, b.total, b.userName || "", b.note || "",
       ]),
     );
 

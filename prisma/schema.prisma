@@ -218,3 +218,21 @@ model Setting {
   key   String @id
   value String
 }
+
+// Belanja barang owner (belanja bahan/perlengkapan) — detail per barang.
+// Otomatis juga membuat CashEntry KELUAR (kategori "Belanja") biar saldo laci akurat.
+model Purchase {
+  id           String   @id @default(cuid())
+  businessDate String
+  itemName     String
+  qty          Int      @default(1)
+  unit         String?
+  unitPrice    Int // harga satuan
+  total        Int
+  note         String?
+  userName     String?
+  cashEntryId  String? // link ke CashEntry KELUAR yang dibuat otomatis
+  createdAt    DateTime @default(now())
+
+  @@index([businessDate])
+}

@@ -5,6 +5,7 @@ import { resolvePeriod } from "@/lib/period";
 import { rupiah, waktu } from "@/lib/format";
 import PeriodFilter from "@/components/PeriodFilter";
 import CashClient from "@/components/CashClient";
+import BelanjaClient from "@/components/BelanjaClient";
 import DeleteCash from "@/components/DeleteCash";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ export default async function KeuanganPage({
   const period = resolvePeriod(sp, settings.dayCutoffHour);
   const bdFilter = period.filter;
 
-  const [txs, entries] = await Promise.all([
+  const [txs, entries, purchases] = await Promise.all([
     prisma.transaction.findMany({
       where: { businessDate: bdFilter, status: { not: "VOID" } },
       select: { total: true, payment: true, businessDate: true },
@@ -29,6 +30,7 @@ export default async function KeuanganPage({
       where: { businessDate: bdFilter },
       orderBy: { createdAt: "desc" },
     }),
+    prisma.purchase.findMany({ where: { businessDate: bdFilter }, orderBy: { createdAt: "desc" } }),
   ]);
 
   const penjualan = txs.reduce((s, t) => s + t.total, 0);
@@ -73,6 +75,9 @@ export default async function KeuanganPage({
         Uang di laci = kas awal + penjualan tunai + pemasukan − pengeluaran. Buat cek kecocokan
         uang fisik saat tutup (QRIS/transfer tidak dihitung sebagai tunai).
       </p>
+
+      {/* Total belanja barang (periode ini) */}
+      <BelanjaClient rows={purchases} />
 
       <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
         <CashClient defaultDate={today} />

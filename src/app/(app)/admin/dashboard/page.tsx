@@ -2,7 +2,8 @@ import { prisma } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { todayKey, businessDateRange, labelHari } from "@/lib/bizday";
 import { rupiah } from "@/lib/format";
-import { labelBulan } from "@/lib/period";
+import { labelBulan, resolvePeriod } from "@/lib/period";
+import PeriodDropdown from "@/components/PeriodDropdown";
 import Link from "next/link";
 import DashboardStats, { type StatData } from "@/components/DashboardStats";
 
@@ -11,53 +12,58 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ bulan?: string }>;
+  searchParams: Promise<{ mode?: string; preset?: string; date?: string; month?: string }>;
 }) {
   const settings = await getSettings();
   const sp = await searchParams;
   const today = todayKey(settings.dayCutoffHour);
   const ym = today.slice(0, 7); // "YYYY-MM"
-  const statMonth = sp.bulan || ym;
+  // Periode pilihan owner (default: bulan berjalan biar transisi mulus).
+  const hasPeriod = sp.mode || sp.preset;
+  const period = hasPeriod
+    ? resolvePeriod(sp, settings.dayCutoffHour)
+    : resolvePeriod({ mode: "bulan", month: ym }, settings.dayCutoffHour);
+  const pf = period.filter; // dipakai semua agregat periode
   const { start, end } = businessDateRange(today, settings.dayCutoffHour);
 
-  const [todayAgg, monthAgg, packs, monthItems, cashMonth, purchMonth] = await Promise.all([
+  const [todayAgg, periodAgg, packs, periodItems, cashPeriod, purchPeriod] = await Promise.all([
     prisma.transaction.aggregate({
-      where: { createdAt: { gte: start, lt: end } },
+      where: { createdAt: { gte: start, lt: end }, status: { not: "VOID" } },
       _sum: { total: true },
       _count: true,
     }),
     prisma.transaction.aggregate({
-      where: { businessDate: { startsWith: ym } },
+      where: { businessDate: pf, status: { not: "VOID" } },
       _sum: { total: true, costTotal: true },
       _count: true,
     }),
     prisma.packaging.findMany({ orderBy: { name: "asc" } }),
     prisma.transactionItem.findMany({
-      where: { transaction: { businessDate: { startsWith: ym } } },
+      where: { transaction: { businessDate: pf, status: { not: "VOID" } } },
       select: { name: true, qty: true, subtotal: true },
     }),
-    prisma.cashEntry.findMany({ where: { businessDate: { startsWith: ym } } }),
-    prisma.purchase.findMany({ where: { businessDate: { startsWith: ym } }, select: { category: true, total: true } }),
+    prisma.cashEntry.findMany({ where: { businessDate: pf } }),
+    prisma.purchase.findMany({ where: { businessDate: pf }, select: { category: true, total: true } }),
   ]);
 
   const omzetToday = todayAgg._sum.total || 0;
-  const omzetMonth = monthAgg._sum.total || 0;
-  const untungMonth = omzetMonth - (monthAgg._sum.costTotal || 0);
+  const omzetMonth = periodAgg._sum.total || 0;
+  const untungMonth = omzetMonth - (periodAgg._sum.costTotal || 0);
 
-  const manualMasuk = cashMonth.filter((e) => e.type === "MASUK").reduce((s, e) => s + e.amount, 0);
-  const keluar = cashMonth.filter((e) => e.type === "KELUAR").reduce((s, e) => s + e.amount, 0);
+  const manualMasuk = cashPeriod.filter((e) => e.type === "MASUK").reduce((s, e) => s + e.amount, 0);
+  const keluar = cashPeriod.filter((e) => e.type === "KELUAR").reduce((s, e) => s + e.amount, 0);
   const saldo = omzetMonth + manualMasuk - keluar;
 
   // Biaya OWNER (uang sendiri — belanja bulanan/gaji/lain), terpisah dari laci.
-  const biayaOwner = purchMonth.reduce((s, p) => s + p.total, 0);
-  const biayaBelanja = purchMonth.filter((p) => p.category === "BELANJA" || !p.category).reduce((s, p) => s + p.total, 0);
-  const biayaGaji = purchMonth.filter((p) => p.category === "GAJI").reduce((s, p) => s + p.total, 0);
+  const biayaOwner = purchPeriod.reduce((s, p) => s + p.total, 0);
+  const biayaBelanja = purchPeriod.filter((p) => p.category === "BELANJA" || !p.category).reduce((s, p) => s + p.total, 0);
+  const biayaGaji = purchPeriod.filter((p) => p.category === "GAJI").reduce((s, p) => s + p.total, 0);
   const untungBersih = untungMonth - biayaOwner;
 
   const lowStock = packs.filter((p) => p.stock <= p.minStock);
 
   const topMap = new Map<string, { qty: number; total: number }>();
-  for (const it of monthItems) {
+  for (const it of periodItems) {
     const c = topMap.get(it.name) || { qty: 0, total: 0 };
     c.qty += it.qty;
     c.total += it.subtotal;
@@ -69,7 +75,7 @@ export default async function DashboardPage({
 
   // --- Data statistik untuk bulan terpilih ---
   const statTrx = await prisma.transaction.findMany({
-    where: { businessDate: { startsWith: statMonth } },
+    where: { businessDate: pf, status: { not: "VOID" } },
     include: { items: true },
   });
   const perHari = new Map<string, number>();
@@ -90,7 +96,7 @@ export default async function DashboardPage({
       .map(([label, value]) => ({ label, value }));
 
   const statData: StatData = {
-    month: statMonth,
+    month: period.mode === "bulan" ? period.month : period.start.slice(0, 7),
     omzetHarian: toBars(perHari, true).map((b) => ({ ...b, label: b.label.slice(8) })), // tanggal saja
     terlaris: toBars(perMenu).slice(0, 8),
     metode: toBars(perMetode),
@@ -102,19 +108,20 @@ export default async function DashboardPage({
       <div>
         <h1 className="text-lg font-bold">Dashboard</h1>
         <p className="text-xs text-slate-500">
-          Hari usaha {labelHari(today)} · bulan {bulanLabel}
+          Hari usaha {labelHari(today)} · laporan: <b>{period.label}</b>
         </p>
       </div>
+      <PeriodDropdown preset={period.preset} date={period.date} label={period.label} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <Stat label="Omzet hari ini" value={rupiah(omzetToday)} sub={`${todayAgg._count} transaksi`} accent />
-        <Stat label="Omzet bulan ini" value={rupiah(omzetMonth)} sub={`${monthAgg._count} transaksi`} />
-        <Stat label="Untung kotor (bulan)" value={rupiah(untungMonth)} good />
-        <Stat label="Kas masuk lain (bulan)" value={rupiah(manualMasuk)} />
-        <Stat label="Pengeluaran laci (bulan)" value={rupiah(keluar)} bad />
-        <Stat label="Saldo bersih (bulan)" value={rupiah(saldo)} />
-        <Stat label="Biaya owner (bulan)" value={rupiah(biayaOwner)} sub={`belanja ${rupiah(biayaBelanja)} · gaji ${rupiah(biayaGaji)}`} bad />
-        <Stat label="Untung BERSIH est. (bulan)" value={rupiah(untungBersih)} sub="untung kotor − biaya owner" accent good />
+        <Stat label="Omzet periode" value={rupiah(omzetMonth)} sub={`${periodAgg._count} transaksi`} />
+        <Stat label="Untung kotor (periode)" value={rupiah(untungMonth)} good />
+        <Stat label="Kas masuk lain" value={rupiah(manualMasuk)} />
+        <Stat label="Pengeluaran laci" value={rupiah(keluar)} bad />
+        <Stat label="Saldo bersih (periode)" value={rupiah(saldo)} />
+        <Stat label="Biaya owner" value={rupiah(biayaOwner)} sub={`belanja ${rupiah(biayaBelanja)} · gaji ${rupiah(biayaGaji)}`} bad />
+        <Stat label="Untung BERSIH est." value={rupiah(untungBersih)} sub="untung kotor − biaya owner" accent good />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -142,7 +149,7 @@ export default async function DashboardPage({
 
         <div className="card">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="font-bold">Menu terlaris (bulan ini)</h2>
+            <h2 className="font-bold">Menu terlaris (periode)</h2>
             <Link href="/rekap" className="text-xs text-brand-700 hover:underline">
               rekap →
             </Link>
@@ -164,7 +171,7 @@ export default async function DashboardPage({
         </div>
       </div>
 
-      <DashboardStats data={statData} monthLabel={labelBulan(statMonth)} />
+      <DashboardStats data={statData} monthLabel={period.label} />
 
       <div className="flex flex-wrap gap-2">
         <Link href="/kasir" className="btn-primary">🧾 Buka Kasir</Link>

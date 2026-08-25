@@ -8,7 +8,7 @@ export default function PeriodFilter({
   date,
   month,
 }: {
-  mode: "hari" | "bulan";
+  mode: "hari" | "bulan" | "rentang"; // rentang hanya dari Dashboard — di sini dianggap hari
   date: string;
   month: string;
 }) {

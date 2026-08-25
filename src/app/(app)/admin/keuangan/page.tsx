@@ -44,13 +44,21 @@ export default async function KeuanganPage({
   const totalMasuk = penjualan + manualMasuk;
   const saldo = totalMasuk - keluar;
 
-  // Kas awal harian (modal laci). Untuk mode bulan = kasAwal × jumlah hari aktif.
-  const hariAktif = new Set<string>(txs.map((t) => t.businessDate));
-  entries.forEach((e) => hariAktif.add(e.businessDate));
-  const kasAwalTotal =
-    period.mode === "hari" ? settings.kasAwal : settings.kasAwal * Math.max(1, hariAktif.size);
-  // Perkiraan uang tunai di laci = kas awal + penjualan tunai + pemasukan − pengeluaran.
-  const uangLaci = kasAwalTotal + penjualanTunai + manualMasuk - keluar;
+  // KAS AWAL = SETELAN LACI (mis. 250rb) — bukan nambah tiap hari. Tiap tutup
+  // kasir, sisanya di atas setelan diambil owner; laci kembali ke 250rb.
+  // Uang di laci (estimasi, hari berjalan) = setelan + arus tunai HARI INI.
+  // Untuk periode > 1 hari: "diambil owner" = Σ per hari max(0, arus tunai hari itu).
+  const arusPerHari = new Map<string, number>();
+  for (const t of txs) {
+    if (t.payment === "TUNAI") arusPerHari.set(t.businessDate, (arusPerHari.get(t.businessDate) || 0) + t.total);
+  }
+  for (const e of entries) {
+    const d = arusPerHari.get(e.businessDate) ?? 0;
+    arusPerHari.set(e.businessDate, d + (e.type === "MASUK" ? e.amount : -e.amount));
+  }
+  const diambilOwner = [...arusPerHari.values()].reduce((s, v) => s + Math.max(0, v), 0);
+  const isHari = period.mode === "hari";
+  const uangLaci = settings.kasAwal + (isHari ? penjualanTunai + manualMasuk - keluar : 0);
 
   return (
     <div className="space-y-4">
@@ -70,14 +78,19 @@ export default async function KeuanganPage({
       </div>
 
       {/* Kas laci (fisik) */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Stat label={`Kas awal${period.mode === "bulan" ? " (× hari)" : ""}`} value={rupiah(kasAwalTotal)} />
-        <Stat label="Penjualan tunai" value={rupiah(penjualanTunai)} />
-        <Stat label="Uang di laci (estimasi)" value={rupiah(uangLaci)} accent />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="Setelan laci (kas awal)" value={rupiah(settings.kasAwal)} sub="uang yang disisakan tiap tutup" />
+        <Stat label="Penjualan tunai (periode)" value={rupiah(penjualanTunai)} />
+        {isHari ? (
+          <Stat label="Uang di laci SEKARANG (est.)" value={rupiah(uangLaci)} sub="setelan + arus tunai hari ini" accent />
+        ) : (
+          <Stat label="Estimasi DIAMBIL OWNER (Σ hari)" value={rupiah(diambilOwner)} sub="arus tunai per hari di atas setelan" good />
+        )}
+        <Stat label="Yang disisakan di laci" value={rupiah(settings.kasAwal)} sub="setelah diambil owner" />
       </div>
       <p className="-mt-1 text-xs text-slate-400">
-        Uang di laci = kas awal + penjualan tunai + pemasukan − pengeluaran. Buat cek kecocokan
-        uang fisik saat tutup (QRIS/transfer tidak dihitung sebagai tunai).
+        Konsep: laci selalu disetel {rupiah(settings.kasAwal)} tiap buka. Kelebihannya diambil owner
+        saat tutup kasir. QRIS/transfer tidak masuk hitungan laci.
       </p>
 
       {/* Biaya owner (belanja/gaji — uang owner, bukan laci) */}
@@ -156,24 +169,29 @@ export default async function KeuanganPage({
 function Stat({
   label,
   value,
+  sub,
   accent,
   bad,
+  good,
 }: {
   label: string;
   value: string;
+  sub?: string;
   accent?: boolean;
   bad?: boolean;
+  good?: boolean;
 }) {
   return (
     <div className="card">
       <div className="text-xs text-slate-500">{label}</div>
       <div
         className={`text-lg font-bold ${
-          accent ? "text-brand-700" : bad ? "text-red-600" : ""
+          accent ? "text-brand-700" : bad ? "text-red-600" : good ? "text-emerald-600" : ""
         }`}
       >
         {value}
       </div>
+      {sub && <div className="mt-0.5 text-[11px] leading-tight text-slate-400">{sub}</div>}
     </div>
   );
 }

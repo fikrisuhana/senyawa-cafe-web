@@ -20,7 +20,7 @@ export default async function DashboardPage({
   const statMonth = sp.bulan || ym;
   const { start, end } = businessDateRange(today, settings.dayCutoffHour);
 
-  const [todayAgg, monthAgg, packs, monthItems, cashMonth] = await Promise.all([
+  const [todayAgg, monthAgg, packs, monthItems, cashMonth, purchMonth] = await Promise.all([
     prisma.transaction.aggregate({
       where: { createdAt: { gte: start, lt: end } },
       _sum: { total: true },
@@ -37,6 +37,7 @@ export default async function DashboardPage({
       select: { name: true, qty: true, subtotal: true },
     }),
     prisma.cashEntry.findMany({ where: { businessDate: { startsWith: ym } } }),
+    prisma.purchase.findMany({ where: { businessDate: { startsWith: ym } }, select: { category: true, total: true } }),
   ]);
 
   const omzetToday = todayAgg._sum.total || 0;
@@ -46,6 +47,12 @@ export default async function DashboardPage({
   const manualMasuk = cashMonth.filter((e) => e.type === "MASUK").reduce((s, e) => s + e.amount, 0);
   const keluar = cashMonth.filter((e) => e.type === "KELUAR").reduce((s, e) => s + e.amount, 0);
   const saldo = omzetMonth + manualMasuk - keluar;
+
+  // Biaya OWNER (uang sendiri — belanja bulanan/gaji/lain), terpisah dari laci.
+  const biayaOwner = purchMonth.reduce((s, p) => s + p.total, 0);
+  const biayaBelanja = purchMonth.filter((p) => p.category === "BELANJA" || !p.category).reduce((s, p) => s + p.total, 0);
+  const biayaGaji = purchMonth.filter((p) => p.category === "GAJI").reduce((s, p) => s + p.total, 0);
+  const untungBersih = untungMonth - biayaOwner;
 
   const lowStock = packs.filter((p) => p.stock <= p.minStock);
 
@@ -104,8 +111,10 @@ export default async function DashboardPage({
         <Stat label="Omzet bulan ini" value={rupiah(omzetMonth)} sub={`${monthAgg._count} transaksi`} />
         <Stat label="Untung kotor (bulan)" value={rupiah(untungMonth)} good />
         <Stat label="Kas masuk lain (bulan)" value={rupiah(manualMasuk)} />
-        <Stat label="Pengeluaran (bulan)" value={rupiah(keluar)} bad />
-        <Stat label="Saldo bersih (bulan)" value={rupiah(saldo)} accent />
+        <Stat label="Pengeluaran laci (bulan)" value={rupiah(keluar)} bad />
+        <Stat label="Saldo bersih (bulan)" value={rupiah(saldo)} />
+        <Stat label="Biaya owner (bulan)" value={rupiah(biayaOwner)} sub={`belanja ${rupiah(biayaBelanja)} · gaji ${rupiah(biayaGaji)}`} bad />
+        <Stat label="Untung BERSIH est. (bulan)" value={rupiah(untungBersih)} sub="untung kotor − biaya owner" accent good />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

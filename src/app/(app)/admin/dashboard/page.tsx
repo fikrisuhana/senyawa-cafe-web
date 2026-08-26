@@ -105,13 +105,15 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-bold">Dashboard</h1>
-        <p className="text-xs text-slate-500">
-          Hari usaha {labelHari(today)} · laporan: <b>{period.label}</b>
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-lg font-bold">Dashboard</h1>
+          <p className="text-xs text-slate-500">
+            Hari usaha {labelHari(today)} · laporan: <b>{period.label}</b>
+          </p>
+        </div>
+        <PeriodDropdown preset={period.preset} date={period.date} />
       </div>
-      <PeriodDropdown preset={period.preset} date={period.date} label={period.label} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <Stat label="Omzet hari ini" value={rupiah(omzetToday)} sub={`${todayAgg._count} transaksi`} accent />

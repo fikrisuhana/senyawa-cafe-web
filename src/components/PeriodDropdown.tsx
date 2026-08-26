@@ -9,11 +9,9 @@ import { PERIOD_PRESETS } from "@/lib/period";
 export default function PeriodDropdown({
   preset,
   date,
-  label,
 }: {
   preset: string;
   date: string;
-  label: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -30,7 +28,7 @@ export default function PeriodDropdown({
   return (
     <div className="flex items-center gap-2">
       <select
-        className="input h-9 w-auto text-sm"
+        className="input h-8 w-auto text-xs"
         value={preset || "hari_ini"}
         onChange={(e) => apply(e.target.value)}
       >
@@ -43,7 +41,7 @@ export default function PeriodDropdown({
       {preset === "tanggal" && (
         <input
           type="date"
-          className="input h-9 w-auto text-sm"
+          className="input h-8 w-auto text-xs"
           value={d}
           onChange={(e) => {
             setD(e.target.value);
@@ -51,7 +49,6 @@ export default function PeriodDropdown({
           }}
         />
       )}
-      <span className="hidden text-xs text-slate-400 sm:inline">{label}</span>
     </div>
   );
 }

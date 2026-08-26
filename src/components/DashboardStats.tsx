@@ -35,17 +35,9 @@ export default function DashboardStats({
 
   return (
     <div className="card space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="font-bold">Statistik</h2>
-          <p className="text-xs text-slate-500">{monthLabel}</p>
-        </div>
-        <input
-          type="month"
-          className="input w-auto"
-          value={data.month}
-          onChange={(e) => router.push(`/admin/dashboard?bulan=${e.target.value}`)}
-        />
+      <div>
+        <h2 className="font-bold">Statistik</h2>
+        <p className="text-xs text-slate-500">{monthLabel}</p>
       </div>
 
       <div className="flex flex-wrap gap-1">

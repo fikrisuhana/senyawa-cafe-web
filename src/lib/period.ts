@@ -18,9 +18,9 @@ export const PERIOD_PRESETS: PresetOpt[] = [
   { id: "kemarin", label: "Kemarin" },
   { id: "7hari", label: "7 hari" },
   { id: "14hari", label: "14 hari" },
-  { id: "1bulan", label: "1 bulan (30 hari)" },
+  { id: "1bulan", label: "1 bulan" },
   { id: "bulan_lalu", label: "Bulan lalu" },
-  { id: "2bulan", label: "2 bulan (60 hari)" },
+  { id: "2bulan", label: "2 bulan" },
   { id: "tanggal", label: "Tanggal tertentu" },
 ];
 

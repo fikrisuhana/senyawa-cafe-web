@@ -28,7 +28,7 @@ export default function PeriodDropdown({
   return (
     <div className="flex items-center gap-2">
       <select
-        className="input h-8 w-auto text-xs"
+        className="input h-8 w-auto min-w-[9.5rem] text-xs"
         value={preset || "hari_ini"}
         onChange={(e) => apply(e.target.value)}
       >
@@ -41,7 +41,7 @@ export default function PeriodDropdown({
       {preset === "tanggal" && (
         <input
           type="date"
-          className="input h-8 w-auto text-xs"
+          className="input h-8 w-auto min-w-[9.5rem] text-xs"
           value={d}
           onChange={(e) => {
             setD(e.target.value);

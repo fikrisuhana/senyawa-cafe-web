@@ -5,6 +5,7 @@ import { resolvePeriod } from "@/lib/period";
 import PeriodFilter from "@/components/PeriodFilter";
 import EmployeeManager, { type EmpRow } from "@/components/EmployeeManager";
 import DeleteAttendance from "@/components/DeleteAttendance";
+import { UserCheck, CalendarCheck, CheckCircle2, AlertCircle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -43,106 +44,124 @@ export default async function AbsensiAdminPage({
   const empRows: EmpRow[] = employees.map((e) => ({ id: e.id, name: e.name, active: e.active }));
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-lg font-bold">Absensi Karyawan</h1>
-          <p className="text-xs text-slate-500">{period.label}</p>
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center space-x-2.5">
+          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+            <UserCheck className="w-4 h-4" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 tracking-tight">Rekap Absensi &amp; Kehadiran Tim</h2>
+            <p className="text-xs text-slate-500">Laporan periode: <strong className="text-slate-700">{period.label}</strong></p>
+          </div>
         </div>
         <PeriodFilter mode={period.mode} date={period.date} month={period.month} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
-        <div className="space-y-4">
-          <div className="card overflow-x-auto !p-0">
-            <div className="p-3 text-sm font-bold">
-              Siapa masuk shift apa
-              {period.mode === "bulan" && (
-                <span className="ml-1 text-xs font-normal text-slate-400">— angka = berapa kali</span>
-              )}
-            </div>
-            <table className="w-full">
-              <thead className="border-b border-slate-200">
-                <tr>
-                  <th className="th">Karyawan</th>
-                  {cols.map((c) => (
-                    <th key={c} className="th text-center">
-                      {c}
-                    </th>
-                  ))}
-                  <th className="th text-right">Total masuk</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {[...matrix.entries()].map(([name, c]) => (
-                  <tr key={name} className="hover:bg-slate-50">
-                    <td className="td font-medium">{name}</td>
-                    {cols.map((col) => (
-                      <td key={col} className="td text-center">
-                        {c.shifts[col] ? (
-                          period.mode === "bulan" ? (
-                            <span className="font-semibold text-brand-700">{c.shifts[col]}×</span>
-                          ) : (
-                            <span className="text-lg text-emerald-600">✓</span>
-                          )
-                        ) : (
-                          <span className="text-slate-300">·</span>
-                        )}
-                      </td>
-                    ))}
-                    <td className="td text-right font-semibold">{c.total}×</td>
-                  </tr>
-                ))}
-                {matrix.size === 0 && (
-                  <tr>
-                    <td className="td text-slate-500" colSpan={cols.length + 2}>
-                      Belum ada karyawan/absensi.
-                    </td>
-                  </tr>
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-6">
+          {/* Matriks Shift Kehadiran (ala app-monitoring table) */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm space-y-0">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Matriks Kehadiran Shift Karyawan</h3>
+                {period.mode === "bulan" && (
+                  <p className="text-[11px] text-slate-400">Angka menunjukkan frekuensi masuk shift dalam bulan terpilih</p>
                 )}
-              </tbody>
-            </table>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50/80 text-slate-500 font-semibold border-b border-slate-200">
+                  <tr>
+                    <th className="py-3 px-4">Nama Karyawan</th>
+                    {cols.map((c) => (
+                      <th key={c} className="py-3 px-4 text-center">
+                        Shift {c}
+                      </th>
+                    ))}
+                    <th className="py-3 px-4 text-right">Total Masuk</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {[...matrix.entries()].map(([name, c]) => (
+                    <tr key={name} className="hover:bg-slate-50/60 transition">
+                      <td className="py-3 px-4 font-bold text-slate-900">{name}</td>
+                      {cols.map((col) => (
+                        <td key={col} className="py-3 px-4 text-center">
+                          {c.shifts[col] ? (
+                            period.mode === "bulan" ? (
+                              <span className="pill-blue font-bold">{c.shifts[col]}×</span>
+                            ) : (
+                              <span className="pill-green">✓ Masuk</span>
+                            )
+                          ) : (
+                            <span className="text-slate-300 font-mono">—</span>
+                          )}
+                        </td>
+                      ))}
+                      <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
+                        {c.total} kali
+                      </td>
+                    </tr>
+                  ))}
+                  {matrix.size === 0 && (
+                    <tr>
+                      <td className="py-8 text-center text-slate-400" colSpan={cols.length + 2}>
+                        Belum ada catatan absensi pada periode ini.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          {/* Rincian ringkas (tanpa jam) + koreksi */}
-          <div className="card overflow-x-auto !p-0">
-            <div className="p-3 text-sm font-bold">Rincian</div>
-            <table className="w-full">
-              <thead className="border-b border-slate-200">
-                <tr>
-                  <th className="th">Hari</th>
-                  <th className="th">Nama</th>
-                  <th className="th">Shift</th>
-                  <th className="th"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {rows.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50">
-                    <td className="td whitespace-nowrap">{labelHari(r.businessDate)}</td>
-                    <td className="td font-medium">{r.employeeName}</td>
-                    <td className="td">
-                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">
-                        {r.shift || "Masuk"}
-                      </span>
-                    </td>
-                    <td className="td text-right">
-                      <DeleteAttendance id={r.id} />
-                    </td>
-                  </tr>
-                ))}
-                {rows.length === 0 && (
+          {/* Rincian Log Absen */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm space-y-0">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="font-bold text-slate-900 text-sm">Log Riwayat Absensi Lengkap</h3>
+              <span className="text-xs text-slate-500">{rows.length} catatan kehadiran</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50/80 text-slate-500 font-semibold border-b border-slate-200">
                   <tr>
-                    <td className="td text-slate-500" colSpan={4}>
-                      Tidak ada data.
-                    </td>
+                    <th className="py-3 px-4">Hari / Tanggal</th>
+                    <th className="py-3 px-4">Nama Karyawan</th>
+                    <th className="py-3 px-4">Shift Masuk</th>
+                    <th className="py-3 px-4 text-right">Aksi</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {rows.map((r) => (
+                    <tr key={r.id} className="hover:bg-slate-50/60 transition">
+                      <td className="py-3 px-4 font-mono text-slate-600 whitespace-nowrap">{labelHari(r.businessDate)}</td>
+                      <td className="py-3 px-4 font-bold text-slate-900">{r.employeeName}</td>
+                      <td className="py-3 px-4">
+                        <span className="pill-slate">{r.shift || "Masuk"}</span>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <DeleteAttendance id={r.id} />
+                      </td>
+                    </tr>
+                  ))}
+                  {rows.length === 0 && (
+                    <tr>
+                      <td className="py-8 text-center text-slate-400" colSpan={4}>
+                        Tidak ada log absensi pada periode ini.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
+        {/* Form Kelola Karyawan */}
         <EmployeeManager rows={empRows} />
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import VoucherClient, { type VoucherRow } from "@/components/VoucherClient";
+import { TicketPercent } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -24,13 +25,18 @@ export default async function VoucherPage() {
     validUntil: ymd(v.validUntil),
   }));
   return (
-    <div className="space-y-4">
-      <h1 className="text-lg font-bold">Voucher / Diskon</h1>
-      <p className="text-xs text-slate-500">
-        Voucher bisa dipilih kasir saat bayar. Atur <b>kuota</b> (maks berapa kali) &amp;
-        <b> periode</b> (kosongkan = tak terbatas). Voucher ditolak otomatis kalau kuota habis
-        atau di luar periode.
-      </p>
+    <div className="space-y-6">
+      <div className="flex items-center space-x-2.5">
+        <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+          <TicketPercent className="w-4 h-4" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight">Manajemen Voucher &amp; Kupon Diskon</h2>
+          <p className="text-xs text-slate-500">
+            Kelola promosi diskon persen / nominal rupiah, kuota pemakaian, dan masa berlaku voucher
+          </p>
+        </div>
+      </div>
       <VoucherClient rows={rows} />
     </div>
   );

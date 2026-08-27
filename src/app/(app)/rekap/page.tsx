@@ -10,6 +10,19 @@ import SpreadsheetCopy from "@/components/SpreadsheetCopy";
 import VoidButton from "@/components/VoidButton";
 import KasClient from "@/components/KasClient";
 import DeleteCash from "@/components/DeleteCash";
+import {
+  BarChart3,
+  TrendingUp,
+  Receipt,
+  Tag,
+  DollarSign,
+  Sparkles,
+  Wallet,
+  ArrowDownLeft,
+  ArrowUpRight,
+  ExternalLink,
+  ChevronRight,
+} from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -114,277 +127,357 @@ export default async function RekapPage({
   const qbase = `mode=${period.mode}&date=${period.date}&month=${period.month}`;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-lg font-bold">Rekap Penjualan</h1>
-          <p className="text-xs text-slate-500">{period.label}</p>
+    <div className="space-y-6">
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center space-x-2.5">
+          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+            <BarChart3 className="w-4 h-4" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 tracking-tight">Rekap & Laporan Penjualan</h2>
+            <p className="text-xs text-slate-500">Laporan periode: <strong className="text-slate-700">{period.label}</strong></p>
+          </div>
         </div>
-        {isAdmin ? (
-          <PeriodFilter mode={period.mode} date={period.date} month={period.month} />
-        ) : (
-          <span className="rounded-lg bg-brand-100 px-3 py-1.5 text-sm font-medium text-brand-700">
-            🔒 Hari usaha berjalan
-          </span>
+
+        <div>
+          {isAdmin ? (
+            <PeriodFilter mode={period.mode} date={period.date} month={period.month} />
+          ) : (
+            <span className="pill-blue text-xs">
+              🔒 Hari Usaha Berjalan
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* KPI 5 Cards Top Row (ala app-monitoring) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center space-x-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+          <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <TrendingUp className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-xl font-bold text-blue-600 leading-tight font-mono truncate">{rupiah(omzet)}</div>
+            <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">TOTAL OMZET</div>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center space-x-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+          <div className="w-11 h-11 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+            <Receipt className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-xl font-bold text-slate-900 leading-tight font-mono">{active.length}</div>
+            <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">TRANSAKSI</div>
+            {jmlVoid > 0 && <div className="text-[10px] text-rose-600 font-medium">{jmlVoid} void / batal</div>}
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center space-x-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+          <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+            <Tag className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-xl font-bold text-slate-800 leading-tight font-mono truncate">{rupiah(diskon)}</div>
+            <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">TOTAL DISKON</div>
+          </div>
+        </div>
+
+        {isAdmin && (
+          <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center space-x-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+            <div className="w-11 h-11 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+              <DollarSign className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xl font-bold text-slate-800 leading-tight font-mono truncate">{rupiah(modal)}</div>
+              <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">MODAL POKOK (HPP)</div>
+            </div>
+          </div>
+        )}
+
+        {isAdmin && (
+          <div className="bg-white border border-emerald-200 rounded-xl p-4 flex items-center space-x-4 shadow-[0_1px_3px_rgba(16,185,129,0.08)] bg-gradient-to-br from-white to-emerald-50/30">
+            <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xl font-bold text-emerald-700 leading-tight font-mono truncate">{rupiah(untung)}</div>
+              <div className="text-[11px] font-semibold tracking-wider text-emerald-600 uppercase">UNTUNG KOTOR</div>
+            </div>
+          </div>
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <Stat label="Omzet" value={rupiah(omzet)} accent />
-        <Stat label="Transaksi" value={String(active.length)} sub={jmlVoid ? `${jmlVoid} dibatalkan` : undefined} />
-        <Stat label="Diskon" value={rupiah(diskon)} />
-        {isAdmin && <Stat label="Modal" value={rupiah(modal)} />}
-        {isAdmin && <Stat label="Untung kotor" value={rupiah(untung)} good />}
-      </div>
-
+      {/* 3 Panels: Breakdown Per Kategori, Metode, Kasir */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Panel title="Per kategori (klik utk rincian)">
-          {[...perKategori.entries()]
-            .sort((a, b) => b[1].total - a[1].total)
-            .map(([k, v]) => {
-              const items = [...(perKategoriItems.get(k) || new Map())].sort(
-                (a, b) => b[1].qty - a[1].qty
-              );
-              return (
-                <details key={k} className="group border-b border-slate-100 last:border-0">
-                  <summary className="-mx-1 flex cursor-pointer list-none items-center justify-between rounded px-1 py-1 text-sm hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
-                    <span className="font-medium">
-                      <span className="mr-1 inline-block text-slate-400 transition group-open:rotate-90">▸</span>
-                      {k} <span className="text-slate-400">({v.qty})</span>
-                    </span>
-                    <span className="font-medium">{rupiah(v.total)}</span>
-                  </summary>
-                  <div className="mt-1 space-y-1 border-l-2 border-brand-200 pb-2 pl-3">
-                    {items.map(([name, d]) => (
-                      <div key={name} className="flex items-center justify-between text-xs">
-                        <span className="text-slate-600">{name}</span>
-                        <span className="tabular-nums text-slate-500">
-                          <span className="font-semibold text-brand-700">{d.qty} pcs</span> · {rupiah(d.total)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              );
-            })}
-        </Panel>
-        <Panel title="Per metode bayar">
-          {[...perMetode.entries()].map(([k, v]) => (
-            <Line key={k} k={k} v={rupiah(v)} />
-          ))}
-        </Panel>
-        <Panel title="Per kasir (trx & total)">
-          {[...perKasir.entries()]
-            .sort((a, b) => b[1].total - a[1].total)
-            .map(([k, v]) => (
-              <div key={k} className="flex items-center justify-between border-b border-slate-100 py-1.5 text-sm last:border-0">
-                <span className="font-medium">{k}</span>
-                <span className="tabular-nums text-slate-600">
-                  <span className="font-semibold text-brand-700">{v.qty}×</span> · {rupiah(v.total)}
-                </span>
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-500">Penjualan per Kategori</h3>
+            <span className="text-[11px] text-slate-400">Klik rincian</span>
+          </div>
+          <div className="space-y-1.5 text-xs">
+            {[...perKategori.entries()]
+              .sort((a, b) => b[1].total - a[1].total)
+              .map(([k, v]) => {
+                const items = [...(perKategoriItems.get(k) || new Map())].sort(
+                  (a, b) => b[1].qty - a[1].qty
+                );
+                return (
+                  <details key={k} className="group border-b border-slate-100 last:border-0 pb-1">
+                    <summary className="flex cursor-pointer list-none items-center justify-between py-1 text-xs hover:bg-slate-50 rounded px-1 transition [&::-webkit-details-marker]:hidden">
+                      <span className="font-semibold text-slate-800 flex items-center gap-1.5">
+                        <ChevronRight className="w-3.5 h-3.5 text-slate-400 transition group-open:rotate-90" />
+                        <span>{k}</span>
+                        <span className="pill-slate text-[10px]">{v.qty} pcs</span>
+                      </span>
+                      <span className="font-mono font-bold text-slate-900">{rupiah(v.total)}</span>
+                    </summary>
+                    <div className="mt-1 space-y-1 border-l-2 border-blue-400 pl-3 py-1 bg-slate-50/50 rounded-r">
+                      {items.map(([name, d]) => (
+                        <div key={name} className="flex items-center justify-between text-[11px] py-0.5">
+                          <span className="text-slate-600 truncate">{name}</span>
+                          <span className="font-mono text-slate-700">
+                            <span className="font-semibold text-blue-600">{d.qty}×</span> · {rupiah(d.total)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                );
+              })}
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-500">Metode Pembayaran</h3>
+          </div>
+          <div className="space-y-2 text-xs">
+            {[...perMetode.entries()].map(([k, v]) => (
+              <div key={k} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
+                <span className="font-semibold text-slate-700">{k}</span>
+                <span className="font-mono font-bold text-slate-900">{rupiah(v)}</span>
               </div>
             ))}
-        </Panel>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-500">Aktivitas per Kasir</h3>
+          </div>
+          <div className="space-y-2 text-xs">
+            {[...perKasir.entries()]
+              .sort((a, b) => b[1].total - a[1].total)
+              .map(([k, v]) => (
+                <div key={k} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-bold text-[10px] flex items-center justify-center">
+                      {k.slice(0, 2).toUpperCase()}
+                    </span>
+                    <span className="font-semibold text-slate-800">{k}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-mono font-bold text-slate-900 block">{rupiah(v.total)}</span>
+                    <span className="text-[10px] text-slate-400">{v.qty} transaksi</span>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
       </div>
 
-      <div className="card overflow-x-auto !p-0">
-        <table className="w-full">
-          <thead className="border-b border-slate-200">
-            <tr>
-              <th className="th">Waktu</th>
-              <th className="th">Kode</th>
-              <th className="th">Kasir</th>
-              <th className="th">Item</th>
-              <th className="th">Bayar</th>
-              <th className="th text-right">Total</th>
-              <th className="th"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {rows.map((t) => {
-              const isVoid = t.status === "VOID";
-              return (
-                <tr key={t.id} className={`hover:bg-slate-50 ${isVoid ? "opacity-60" : ""}`}>
-                  <td className="td whitespace-nowrap">{waktu(t.createdAt)}</td>
-                  <td className="td">
-                    <Link href={`/receipt/${t.code}`} target="_blank" className="text-brand-700 hover:underline">
-                      {t.code}
-                    </Link>
-                    {isVoid && (
-                      <span className="ml-1 rounded bg-red-100 px-1 text-[10px] font-semibold text-red-700">
-                        BATAL
-                      </span>
-                    )}
-                    <span className="ml-1 text-[10px] text-slate-400">
-                      {t.orderType === "TAKEAWAY" ? "🥡" : "🍽️"}
-                    </span>
-                  </td>
-                  <td className="td">{t.cashierName}</td>
-                  <td className="td text-slate-500">
-                    {t.items.reduce((s, i) => s + i.qty, 0)} item
-                    {t.discount > 0 && (
-                      <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] text-amber-700">
-                        {t.voucherName || "diskon"}
-                      </span>
-                    )}
-                  </td>
-                  <td className="td">{t.payment}</td>
-                  <td className={`td text-right font-semibold ${isVoid ? "line-through" : ""}`}>
-                    {rupiah(t.total)}
-                  </td>
-                  <td className="td text-right">
-                    {!isVoid && <VoidButton id={t.id} code={t.code} />}
+      {/* Tabel Riwayat Transaksi (ala app-monitoring table) */}
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm space-y-0">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="font-bold text-slate-900 text-sm">Daftar Log Transaksi</h3>
+          <span className="text-xs text-slate-500">
+            {all.length} transaksi pada periode ini
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50/80 text-slate-500 font-semibold border-b border-slate-200">
+              <tr>
+                <th className="py-3 px-4">Waktu</th>
+                <th className="py-3 px-4">Kode Transaksi</th>
+                <th className="py-3 px-4">Kasir</th>
+                <th className="py-3 px-4">Detail Item</th>
+                <th className="py-3 px-4">Metode Bayar</th>
+                <th className="py-3 px-4 text-right">Total Tagihan</th>
+                <th className="py-3 px-4 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-slate-700">
+              {rows.map((t) => {
+                const isVoid = t.status === "VOID";
+                return (
+                  <tr key={t.id} className={`hover:bg-slate-50/60 transition ${isVoid ? "opacity-60 bg-rose-50/20" : ""}`}>
+                    <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">{waktu(t.createdAt)}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center space-x-1.5">
+                        <Link
+                          href={`/receipt/${t.code}`}
+                          target="_blank"
+                          className="font-mono font-bold text-blue-600 hover:underline flex items-center gap-1"
+                        >
+                          <span>{t.code}</span>
+                          <ExternalLink className="w-3 h-3 text-slate-400" />
+                        </Link>
+                        {isVoid && (
+                          <span className="pill-red text-[10px]">
+                            BATAL / VOID
+                          </span>
+                        )}
+                        <span className="text-[10px] text-slate-400">
+                          {t.orderType === "TAKEAWAY" ? "🥡 Bungkus" : "🍽️ Ditempat"}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 font-medium text-slate-800">{t.cashierName}</td>
+                    <td className="py-3 px-4 text-slate-600">
+                      <span className="font-semibold">{t.items.reduce((s, i) => s + i.qty, 0)} item</span>
+                      {t.discount > 0 && (
+                        <span className="ml-1 pill-amber text-[10px]">
+                          {t.voucherName ? `Promo: ${t.voucherName}` : "Diskon"}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="pill-slate font-medium">{t.payment}</span>
+                    </td>
+                    <td className={`py-3 px-4 text-right font-mono font-bold ${isVoid ? "line-through text-slate-400" : "text-slate-900"}`}>
+                      {rupiah(t.total)}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      {!isVoid && <VoidButton id={t.id} code={t.code} />}
+                    </td>
+                  </tr>
+                );
+              })}
+              {rows.length === 0 && (
+                <tr>
+                  <td className="py-8 text-center text-slate-400" colSpan={7}>
+                    Belum ada riwayat transaksi pada periode terpilih.
                   </td>
                 </tr>
-              );
-            })}
-            {rows.length === 0 && (
-              <tr>
-                <td className="td text-slate-500" colSpan={7}>
-                  Belum ada transaksi pada periode ini.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {isAdmin && totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex items-center justify-center gap-2 pt-2">
           {page > 1 && (
-            <Link href={`/rekap?${qbase}&page=${page - 1}`} className="btn-ghost">
-              ‹ Sebelumnya
+            <Link href={`/rekap?${qbase}&page=${page - 1}`} className="btn-ghost text-xs">
+              ‹ Halaman Sebelumnya
             </Link>
           )}
-          <span className="text-sm text-slate-500">
-            Hal {page} / {totalPages}
+          <span className="text-xs text-slate-500 px-2 font-medium">
+            Halaman {page} dari {totalPages}
           </span>
           {page < totalPages && (
-            <Link href={`/rekap?${qbase}&page=${page + 1}`} className="btn-ghost">
-              Berikutnya ›
+            <Link href={`/rekap?${qbase}&page=${page + 1}`} className="btn-ghost text-xs">
+              Halaman Berikutnya ›
             </Link>
           )}
         </div>
       )}
 
-      {/* Kas & Pengeluaran (jadi satu dengan rekap) */}
-      <div className="space-y-3 border-t border-slate-200 pt-4">
-        <h2 className="text-base font-bold">Kas &amp; Pengeluaran</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat label={`Kas awal${period.mode === "bulan" ? " (×hari)" : ""}`} value={rupiah(kasAwalTotal)} />
-          <Stat label="Penjualan tunai" value={rupiah(penjualanTunai)} />
-          <Stat label="Pengeluaran" value={rupiah(pengeluaran)} bad />
-          <Stat label="Uang di laci (est.)" value={rupiah(uangLaci)} accent />
+      {/* Kas & Pengeluaran Laci */}
+      <div className="space-y-4 pt-4 border-t border-slate-200">
+        <div className="flex items-center space-x-2.5">
+          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+            <Wallet className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-900 text-sm">Rekonsiliasi Kas & Pengeluaran Laci</h3>
+            <p className="text-xs text-slate-400">
+              Uang di laci = Kas Awal + Penjualan Tunai + Kas Masuk − Pengeluaran Laci.
+            </p>
+          </div>
         </div>
-        <p className="text-xs text-slate-400">
-          Uang di laci = kas awal + penjualan tunai + pemasukan − pengeluaran (QRIS/transfer bukan tunai).
-        </p>
-        <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm">
+            <span className="text-[11px] text-slate-400 uppercase font-semibold block">Kas Awal {period.mode === "bulan" ? "(Total Hari)" : ""}</span>
+            <span className="font-mono text-base font-bold text-slate-800">{rupiah(kasAwalTotal)}</span>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm">
+            <span className="text-[11px] text-slate-400 uppercase font-semibold block">Penjualan Tunai</span>
+            <span className="font-mono text-base font-bold text-emerald-600">{rupiah(penjualanTunai)}</span>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm">
+            <span className="text-[11px] text-slate-400 uppercase font-semibold block">Pengeluaran Laci</span>
+            <span className="font-mono text-base font-bold text-rose-600">{rupiah(pengeluaran)}</span>
+          </div>
+          <div className="bg-white border border-blue-200 rounded-xl p-3.5 shadow-sm bg-blue-50/30">
+            <span className="text-[11px] text-blue-600 uppercase font-semibold block">Estimasi Fisik Uang Laci</span>
+            <span className="font-mono text-base font-bold text-blue-700">{rupiah(uangLaci)}</span>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
           <KasClient />
-          <div className="card overflow-x-auto !p-0">
-            <div className="p-3 text-sm font-bold">Catatan kas ({period.label})</div>
-            <table className="w-full">
-              <thead className="border-b border-slate-200">
-                <tr>
-                  <th className="th">Waktu</th>
-                  <th className="th">Tipe</th>
-                  <th className="th">Kategori</th>
-                  <th className="th">Oleh</th>
-                  <th className="th text-right">Nominal</th>
-                  {isAdmin && <th className="th"></th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {cashEntries.map((e) => (
-                  <tr key={e.id} className="hover:bg-slate-50">
-                    <td className="td whitespace-nowrap">{waktu(e.createdAt)}</td>
-                    <td className="td">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          e.type === "MASUK" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-                        }`}
-                      >
-                        {e.type}
-                      </span>
-                    </td>
-                    <td className="td">
-                      {e.category}
-                      {e.note ? <span className="text-slate-400"> · {e.note}</span> : null}
-                    </td>
-                    <td className="td text-slate-500">{e.userName || "-"}</td>
-                    <td className={`td text-right font-semibold ${e.type === "KELUAR" ? "text-red-600" : "text-emerald-600"}`}>
-                      {e.type === "KELUAR" ? "−" : "+"}
-                      {rupiah(e.amount)}
-                    </td>
-                    {isAdmin && (
-                      <td className="td text-right">
-                        <DeleteCash id={e.id} />
-                      </td>
-                    )}
-                  </tr>
-                ))}
-                {cashEntries.length === 0 && (
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+            <div className="p-3.5 border-b border-slate-100 flex items-center justify-between">
+              <h4 className="font-bold text-slate-900 text-xs">Catatan Kas Masuk / Keluar ({period.label})</h4>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50/80 text-slate-500 font-semibold border-b border-slate-200">
                   <tr>
-                    <td className="td text-slate-500" colSpan={isAdmin ? 6 : 5}>
-                      Belum ada catatan kas.
-                    </td>
+                    <th className="py-2.5 px-3">Waktu</th>
+                    <th className="py-2.5 px-3">Tipe</th>
+                    <th className="py-2.5 px-3">Kategori & Keterangan</th>
+                    <th className="py-2.5 px-3">Petugas</th>
+                    <th className="py-2.5 px-3 text-right">Nominal</th>
+                    {isAdmin && <th className="py-2.5 px-3 text-right">Aksi</th>}
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {cashEntries.map((e) => (
+                    <tr key={e.id} className="hover:bg-slate-50/50">
+                      <td className="py-2.5 px-3 font-mono text-slate-500 whitespace-nowrap">{waktu(e.createdAt)}</td>
+                      <td className="py-2.5 px-3">
+                        <span className={e.type === "MASUK" ? "pill-green" : "pill-red"}>
+                          {e.type}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <span className="font-semibold text-slate-800">{e.category}</span>
+                        {e.note && <span className="text-slate-400"> · {e.note}</span>}
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-500">{e.userName || "-"}</td>
+                      <td className={`py-2.5 px-3 text-right font-mono font-bold ${e.type === "KELUAR" ? "text-rose-600" : "text-emerald-600"}`}>
+                        {e.type === "KELUAR" ? "−" : "+"}
+                        {rupiah(e.amount)}
+                      </td>
+                      {isAdmin && (
+                        <td className="py-2.5 px-3 text-right">
+                          <DeleteCash id={e.id} />
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                  {cashEntries.length === 0 && (
+                    <tr>
+                      <td className="py-6 text-center text-slate-400" colSpan={isAdmin ? 6 : 5}>
+                        Belum ada catatan kas masuk / keluar pada periode ini.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
 
       {isAdmin && all.length > 0 && <SpreadsheetCopy tsv={tsv} />}
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  sub,
-  accent,
-  good,
-  bad,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  accent?: boolean;
-  good?: boolean;
-  bad?: boolean;
-}) {
-  return (
-    <div className="card">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div
-        className={`font-mono text-xl font-bold tabular-nums ${
-          accent ? "text-brand-700" : good ? "text-emerald-600" : bad ? "text-red-600" : ""
-        }`}
-      >
-        {value}
-      </div>
-      {sub && <div className="text-[11px] text-red-500">{sub}</div>}
-    </div>
-  );
-}
-
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="card">
-      <h3 className="mb-2 text-sm font-bold">{title}</h3>
-      <div className="space-y-1">{children}</div>
-    </div>
-  );
-}
-
-function Line({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="flex justify-between text-sm">
-      <span className="text-slate-600">{k}</span>
-      <span className="font-mono font-medium tabular-nums">{v}</span>
     </div>
   );
 }

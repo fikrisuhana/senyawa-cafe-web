@@ -6,6 +6,21 @@ import { labelBulan, resolvePeriod } from "@/lib/period";
 import PeriodDropdown from "@/components/PeriodDropdown";
 import Link from "next/link";
 import DashboardStats, { type StatData } from "@/components/DashboardStats";
+import {
+  LayoutGrid,
+  TrendingUp,
+  Receipt,
+  AlertTriangle,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Wallet,
+  Sparkles,
+  Utensils,
+  Plus,
+  Flame,
+  CheckCircle2,
+  Package,
+} from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -104,112 +119,228 @@ export default async function DashboardPage({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-lg font-bold">Dashboard</h1>
-          <p className="text-xs text-slate-500">
-            Hari usaha {labelHari(today)} · laporan: <b>{period.label}</b>
-          </p>
+    <div className="space-y-6">
+      {/* Top Title & Filter Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center space-x-2.5">
+          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+            <LayoutGrid className="w-4 h-4" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 tracking-tight">Dashboard Ringkasan Operasional</h2>
+            <p className="text-xs text-slate-500">
+              Hari usaha {labelHari(today)} · Laporan aktif: <strong className="text-slate-700">{period.label}</strong>
+            </p>
+          </div>
         </div>
-        <PeriodDropdown preset={period.preset} date={period.date} />
+
+        <div className="flex items-center gap-2">
+          <PeriodDropdown preset={period.preset} date={period.date} />
+          <Link
+            href="/kasir"
+            className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Buka Kasir</span>
+          </Link>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        <Stat label="Omzet hari ini" value={rupiah(omzetToday)} sub={`${todayAgg._count} transaksi`} accent />
-        <Stat label="Omzet periode" value={rupiah(omzetMonth)} sub={`${periodAgg._count} transaksi`} />
-        <Stat label="Untung kotor (periode)" value={rupiah(untungMonth)} good />
-        <Stat label="Kas masuk lain" value={rupiah(manualMasuk)} />
-        <Stat label="Pengeluaran laci" value={rupiah(keluar)} bad />
-        <Stat label="Saldo bersih (periode)" value={rupiah(saldo)} />
-        <Stat label="Biaya owner" value={rupiah(biayaOwner)} sub={`belanja ${rupiah(biayaBelanja)} · gaji ${rupiah(biayaGaji)}`} bad />
-        <Stat label="Untung BERSIH est." value={rupiah(untungBersih)} sub="untung kotor − biaya owner" accent good />
+      {/* KPI Top Row Cards (ala app-monitoring) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center space-x-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+          <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <TrendingUp className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-xl font-bold text-slate-900 leading-tight font-mono truncate">{rupiah(omzetToday)}</div>
+            <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">OMZET HARI INI</div>
+            <div className="text-[11px] text-blue-600 font-medium">{todayAgg._count} transaksi hari ini</div>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center space-x-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+          <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <Receipt className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-xl font-bold text-emerald-600 leading-tight font-mono truncate">{rupiah(omzetMonth)}</div>
+            <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">OMZET PERIODE</div>
+            <div className="text-[11px] text-emerald-600 font-medium">{periodAgg._count} total transaksi</div>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center space-x-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+          <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-xl font-bold text-purple-600 leading-tight font-mono truncate">{rupiah(untungBersih)}</div>
+            <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">ESTIMASI UNTUNG BERSIH</div>
+            <div className="text-[11px] text-slate-400">Untung kotor: {rupiah(untungMonth)}</div>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center space-x-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+          <div className="w-11 h-11 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+            <Wallet className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-xl font-bold text-slate-800 leading-tight font-mono truncate">{rupiah(saldo)}</div>
+            <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">SALDO BERSIH KAS LACI</div>
+            <div className="text-[11px] text-slate-400">Keluar: {rupiah(keluar)}</div>
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="card">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="font-bold">Stok menipis</h2>
-            <Link href="/admin/stok" className="text-xs text-brand-700 hover:underline">
-              kelola stok →
+      {/* Row 2: Secondary Metric Bar */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div className="bg-white border border-slate-200 rounded-xl p-3.5 flex items-center justify-between shadow-sm">
+          <div>
+            <span className="text-[11px] text-slate-400 uppercase font-semibold block">Kas Masuk Lain</span>
+            <span className="font-mono text-sm font-bold text-slate-800">{rupiah(manualMasuk)}</span>
+          </div>
+          <ArrowDownLeft className="w-4 h-4 text-emerald-500" />
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-3.5 flex items-center justify-between shadow-sm">
+          <div>
+            <span className="text-[11px] text-slate-400 uppercase font-semibold block">Pengeluaran Laci</span>
+            <span className="font-mono text-sm font-bold text-rose-600">{rupiah(keluar)}</span>
+          </div>
+          <ArrowUpRight className="w-4 h-4 text-rose-500" />
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-3.5 flex items-center justify-between shadow-sm">
+          <div>
+            <span className="text-[11px] text-slate-400 uppercase font-semibold block">Biaya Belanja Owner</span>
+            <span className="font-mono text-sm font-bold text-slate-800">{rupiah(biayaBelanja)}</span>
+          </div>
+          <Package className="w-4 h-4 text-amber-500" />
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-3.5 flex items-center justify-between shadow-sm">
+          <div>
+            <span className="text-[11px] text-slate-400 uppercase font-semibold block">Total Biaya Gaji</span>
+            <span className="font-mono text-sm font-bold text-slate-800">{rupiah(biayaGaji)}</span>
+          </div>
+          <Utensils className="w-4 h-4 text-blue-500" />
+        </div>
+      </div>
+
+      {/* Side-by-Side: Stok Menipis & Menu Terlaris */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Stok Menipis Card */}
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-xs">
+                <AlertTriangle className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Peringatan Stok & Bahan</h3>
+                <p className="text-[11px] text-slate-400">Bahan atau kemasan yang berada di bawah batas minimum</p>
+              </div>
+            </div>
+            <Link
+              href="/admin/stok"
+              className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1"
+            >
+              <span>Kelola Stok</span>
+              <span>→</span>
             </Link>
           </div>
-          <div className="space-y-1">
+
+          <div className="space-y-2">
             {lowStock.map((p) => (
-              <div key={p.id} className="flex items-center justify-between text-sm">
-                <span>{p.name}</span>
-                <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                  {p.stock} {p.unit} (min {p.minStock})
+              <div
+                key={p.id}
+                className="flex items-center justify-between p-2.5 rounded-lg bg-rose-50/50 border border-rose-100 text-xs"
+              >
+                <div className="flex items-center space-x-2">
+                  <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                  <span className="font-semibold text-slate-800">{p.name}</span>
+                </div>
+                <span className="pill-red font-mono">
+                  Sisa {p.stock} {p.unit} (Min {p.minStock})
                 </span>
               </div>
             ))}
             {lowStock.length === 0 && (
-              <p className="text-sm text-slate-500">Semua stok aman 👍</p>
+              <div className="py-6 text-center text-xs text-slate-400 flex flex-col items-center justify-center space-y-1">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                <span className="font-medium text-slate-600">Semua stok bahan dan kemasan aman</span>
+              </div>
             )}
           </div>
         </div>
 
-        <div className="card">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="font-bold">Menu terlaris (periode)</h2>
-            <Link href="/rekap" className="text-xs text-brand-700 hover:underline">
-              rekap →
+        {/* Menu Terlaris Card */}
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-bold text-xs">
+                <Flame className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Top 5 Menu Terlaris</h3>
+                <p className="text-[11px] text-slate-400">Berdasarkan volume penjualan pada periode terpilih</p>
+              </div>
+            </div>
+            <Link
+              href="/rekap"
+              className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1"
+            >
+              <span>Rekap Lengkap</span>
+              <span>→</span>
             </Link>
           </div>
-          <div className="space-y-1">
+
+          <div className="space-y-2">
             {top.map(([name, v], i) => (
-              <div key={name} className="flex items-center justify-between text-sm">
-                <span>
-                  <span className="mr-2 text-slate-400">{i + 1}.</span>
-                  {name}
-                </span>
-                <span className="font-medium">
-                  {v.qty}× · {rupiah(v.total)}
-                </span>
+              <div
+                key={name}
+                className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-100 text-xs"
+              >
+                <div className="flex items-center space-x-2">
+                  <span className="w-5 h-5 rounded-md bg-blue-50 text-blue-600 font-bold text-[11px] flex items-center justify-center">
+                    {i + 1}
+                  </span>
+                  <span className="font-semibold text-slate-800">{name}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="pill-blue font-mono">{v.qty} porsi</span>
+                  <span className="font-mono font-bold text-slate-800">{rupiah(v.total)}</span>
+                </div>
               </div>
             ))}
-            {top.length === 0 && <p className="text-sm text-slate-500">Belum ada penjualan.</p>}
+            {top.length === 0 && (
+              <div className="py-6 text-center text-xs text-slate-400">
+                Belum ada transaksi penjualan pada periode ini.
+              </div>
+            )}
           </div>
         </div>
       </div>
 
+      {/* Dashboard Analytics / Chart Section */}
       <DashboardStats data={statData} monthLabel={period.label} />
 
-      <div className="flex flex-wrap gap-2">
-        <Link href="/kasir" className="btn-primary">🧾 Buka Kasir</Link>
-        <Link href="/admin/keuangan" className="btn-ghost">💰 Catatan Keuangan</Link>
-        <Link href="/admin/menu" className="btn-ghost">🍽️ Kelola Menu</Link>
+      {/* Quick Navigation Footers */}
+      <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200">
+        <Link href="/kasir" className="btn-primary">
+          <Receipt className="w-4 h-4" />
+          <span>Buka Kasir</span>
+        </Link>
+        <Link href="/admin/keuangan" className="btn-ghost">
+          <Wallet className="w-4 h-4 text-slate-500" />
+          <span>Catatan Keuangan</span>
+        </Link>
+        <Link href="/admin/menu" className="btn-ghost">
+          <Utensils className="w-4 h-4 text-slate-500" />
+          <span>Kelola Menu</span>
+        </Link>
       </div>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  sub,
-  accent,
-  good,
-  bad,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  accent?: boolean;
-  good?: boolean;
-  bad?: boolean;
-}) {
-  return (
-    <div className="card">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div
-        className={`font-mono text-xl font-bold tabular-nums ${
-          accent ? "text-brand-700" : good ? "text-emerald-600" : bad ? "text-red-600" : ""
-        }`}
-      >
-        {value}
-      </div>
-      {sub && <div className="text-xs text-slate-400">{sub}</div>}
     </div>
   );
 }

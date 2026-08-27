@@ -9,14 +9,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const settings = await getSettings();
 
   return (
-    <div className="min-h-screen">
-      <Nav
-        user={user}
-        storeName={settings.storeName}
-        logo={settings.logoEmoji}
-        logoImage={settings.logoImage}
-      />
-      <main className="mx-auto max-w-6xl p-4 lg:pl-[17rem]">{children}</main>
-    </div>
+    <Nav
+      user={user}
+      storeName={settings.storeName}
+      logo={settings.logoEmoji}
+      logoImage={settings.logoImage}
+    >
+      {children}
+    </Nav>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Check, CheckCircle2, User } from "lucide-react";
 
 export type EmpRow = { id: string; name: string; shifts: string[] };
 
@@ -27,19 +28,32 @@ export default function AbsenClient({
     setBusy("");
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
-      setErr(j.error || "Gagal");
+      setErr(j.error || "Gagal mengubah status absensi");
       return;
     }
     router.refresh();
   }
 
   return (
-    <div className="space-y-2">
-      {err && <p className="text-sm text-red-600">{err}</p>}
+    <div className="space-y-3 text-xs">
+      {err && <div className="p-3 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl font-medium">{err}</div>}
       {list.map((e) => (
-        <div key={e.id} className="card flex flex-wrap items-center gap-3 !py-3">
-          <div className="flex-1 font-semibold">{e.name}</div>
-          <div className="flex gap-1">
+        <div key={e.id} className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 font-bold text-xs flex items-center justify-center shrink-0">
+              {e.name.slice(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <div className="font-bold text-slate-900 text-sm">{e.name}</div>
+              <div className="text-[11px] text-slate-400">
+                {e.shifts.length > 0
+                  ? `Hadir: ${e.shifts.join(", ")}`
+                  : "Belum absen hari ini"}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
             {shifts.map((s) => {
               const on = e.shifts.includes(s);
               return (
@@ -47,22 +61,22 @@ export default function AbsenClient({
                   key={s}
                   onClick={() => toggle(e.id, s)}
                   disabled={!!busy}
-                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                  className={`px-4 py-2 rounded-lg font-semibold text-xs transition flex items-center gap-1.5 ${
                     on
-                      ? "bg-emerald-600 text-white"
-                      : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                      : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
                   }`}
                 >
-                  {on ? "✓ " : ""}
-                  {s}
+                  {on && <Check className="w-3.5 h-3.5" />}
+                  <span>{s}</span>
                 </button>
               );
             })}
           </div>
         </div>
       ))}
-      <p className="text-center text-xs text-slate-400">
-        Hijau = sudah masuk shift itu hari ini. Nggak perlu absen pulang.
+      <p className="text-center text-[11px] text-slate-400 pt-2">
+        💡 Tombol hijau menandakan karyawan sudah tercatat hadir pada shift tersebut hari ini.
       </p>
     </div>
   );

@@ -7,6 +7,7 @@ import PeriodFilter from "@/components/PeriodFilter";
 import CashClient from "@/components/CashClient";
 import BelanjaClient from "@/components/BelanjaClient";
 import DeleteCash from "@/components/DeleteCash";
+import { DollarSign, Wallet, TrendingUp, TrendingDown, CreditCard, ShoppingBag, Banknote } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -44,10 +45,7 @@ export default async function KeuanganPage({
   const totalMasuk = penjualan + manualMasuk;
   const saldo = totalMasuk - keluar;
 
-  // KAS AWAL = SETELAN LACI (mis. 250rb) — bukan nambah tiap hari. Tiap tutup
-  // kasir, sisanya di atas setelan diambil owner; laci kembali ke 250rb.
-  // Uang di laci (estimasi, hari berjalan) = setelan + arus tunai HARI INI.
-  // Untuk periode > 1 hari: "diambil owner" = Σ per hari max(0, arus tunai hari itu).
+  // KAS AWAL = SETELAN LACI
   const arusPerHari = new Map<string, number>();
   for (const t of txs) {
     if (t.payment === "TUNAI") arusPerHari.set(t.businessDate, (arusPerHari.get(t.businessDate) || 0) + t.total);
@@ -61,137 +59,169 @@ export default async function KeuanganPage({
   const uangLaci = settings.kasAwal + (isHari ? penjualanTunai + manualMasuk - keluar : 0);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-lg font-bold">Catatan Keuangan</h1>
-          <p className="text-xs text-slate-500">{period.label}</p>
+    <div className="space-y-6">
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center space-x-2.5">
+          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+            <DollarSign className="w-4 h-4" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 tracking-tight">Catatan Arus Keuangan &amp; Kas</h2>
+            <p className="text-xs text-slate-500">Laporan periode: <strong className="text-slate-700">{period.label}</strong></p>
+          </div>
         </div>
         <PeriodFilter mode={period.mode} date={period.date} month={period.month} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Penjualan (otomatis)" value={rupiah(penjualan)} />
-        <Stat label="Pemasukan lain" value={rupiah(manualMasuk)} />
-        <Stat label="Pengeluaran" value={rupiah(keluar)} bad />
-        <Stat label="Saldo bersih" value={rupiah(saldo)} accent />
-      </div>
+      {/* Primary KPI Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center space-x-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+          <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <TrendingUp className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-xl font-bold text-blue-600 leading-tight font-mono truncate">{rupiah(penjualan)}</div>
+            <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">PENJUALAN POS</div>
+          </div>
+        </div>
 
-      {/* Kas laci (fisik) */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Setelan laci (kas awal)" value={rupiah(settings.kasAwal)} sub="uang yang disisakan tiap tutup" />
-        <Stat label="Penjualan tunai (periode)" value={rupiah(penjualanTunai)} />
-        {isHari ? (
-          <Stat label="Uang di laci SEKARANG (est.)" value={rupiah(uangLaci)} sub="setelan + arus tunai hari ini" accent />
-        ) : (
-          <Stat label="Estimasi DIAMBIL OWNER (Σ hari)" value={rupiah(diambilOwner)} sub="arus tunai per hari di atas setelan" good />
-        )}
-        <Stat label="Yang disisakan di laci" value={rupiah(settings.kasAwal)} sub="setelah diambil owner" />
-      </div>
-      <p className="-mt-1 text-xs text-slate-400">
-        Konsep: laci selalu disetel {rupiah(settings.kasAwal)} tiap buka. Kelebihannya diambil owner
-        saat tutup kasir. QRIS/transfer tidak masuk hitungan laci.
-      </p>
+        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center space-x-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+          <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <Banknote className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-xl font-bold text-emerald-600 leading-tight font-mono truncate">{rupiah(manualMasuk)}</div>
+            <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">PEMASUKAN LAIN</div>
+          </div>
+        </div>
 
-      {/* Biaya owner (belanja/gaji — uang owner, bukan laci) */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Biaya owner (periode)" value={rupiah(purchases.reduce((s2, p2) => s2 + p2.total, 0))} />
-        <Stat
-          label="— Belanja"
-          value={rupiah(purchases.filter((p2) => p2.category === "BELANJA" || !p2.category).reduce((s2, p2) => s2 + p2.total, 0))}
-        />
-        <Stat label="— Gaji" value={rupiah(purchases.filter((p2) => p2.category === "GAJI").reduce((s2, p2) => s2 + p2.total, 0))} />
-        <Stat label="— Lainnya" value={rupiah(purchases.filter((p2) => p2.category === "LAIN").reduce((s2, p2) => s2 + p2.total, 0))} />
-      </div>
-      <BelanjaClient rows={purchases} bahans={packs} />
+        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center space-x-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+          <div className="w-11 h-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+            <TrendingDown className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-xl font-bold text-rose-600 leading-tight font-mono truncate">{rupiah(keluar)}</div>
+            <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">PENGELUARAN KAS</div>
+          </div>
+        </div>
 
-      <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
-        <CashClient defaultDate={today} />
-
-        <div className="card overflow-x-auto !p-0">
-          <div className="p-3 text-sm font-bold">Rincian manual</div>
-          <table className="w-full">
-            <thead className="border-b border-slate-200">
-              <tr>
-                <th className="th">Waktu</th>
-                <th className="th">Tipe</th>
-                <th className="th">Kategori</th>
-                <th className="th">Catatan</th>
-                <th className="th text-right">Nominal</th>
-                <th className="th"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {entries.map((e) => (
-                <tr key={e.id} className="hover:bg-slate-50">
-                  <td className="td whitespace-nowrap">{waktu(e.createdAt)}</td>
-                  <td className="td">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        e.type === "MASUK"
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-red-100 text-red-700"
-                      }`}
-                    >
-                      {e.type}
-                    </span>
-                  </td>
-                  <td className="td">{e.category}</td>
-                  <td className="td text-slate-500">{e.note || "-"}</td>
-                  <td
-                    className={`td text-right font-semibold ${
-                      e.type === "KELUAR" ? "text-red-600" : "text-emerald-600"
-                    }`}
-                  >
-                    {e.type === "KELUAR" ? "−" : "+"}
-                    {rupiah(e.amount)}
-                  </td>
-                  <td className="td">
-                    <DeleteCash id={e.id} />
-                  </td>
-                </tr>
-              ))}
-              {entries.length === 0 && (
-                <tr>
-                  <td className="td text-slate-500" colSpan={6}>
-                    Belum ada catatan manual. Penjualan otomatis sudah dihitung di ringkasan atas.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center space-x-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+          <div className="w-11 h-11 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+            <Wallet className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-xl font-bold text-slate-900 leading-tight font-mono truncate">{rupiah(saldo)}</div>
+            <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">SALDO BERSIH ARUS</div>
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
 
-function Stat({
-  label,
-  value,
-  sub,
-  accent,
-  bad,
-  good,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  accent?: boolean;
-  bad?: boolean;
-  good?: boolean;
-}) {
-  return (
-    <div className="card">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div
-        className={`font-mono text-lg font-bold tabular-nums ${
-          accent ? "text-brand-700" : bad ? "text-red-600" : good ? "text-emerald-600" : ""
-        }`}
-      >
-        {value}
+      {/* Kas Fisik Laci Rekonsiliasi */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 text-xs">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+          <div className="flex items-center space-x-2">
+            <Wallet className="w-4 h-4 text-slate-600" />
+            <h3 className="font-bold text-slate-900 text-sm">Rekonsiliasi Kas Fisik Laci (Cash Drawer)</h3>
+          </div>
+          <span className="text-[11px] text-slate-400">Setelan Laci: <strong>{rupiah(settings.kasAwal)}</strong></span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+            <span className="text-[10px] text-slate-400 uppercase font-semibold block">Modal Laci Awal</span>
+            <span className="font-mono text-base font-bold text-slate-800">{rupiah(settings.kasAwal)}</span>
+            <span className="text-[10px] text-slate-400 block mt-0.5">Uang yang disisakan tiap tutup kasir</span>
+          </div>
+
+          <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+            <span className="text-[10px] text-slate-400 uppercase font-semibold block">Penjualan Tunai Periode</span>
+            <span className="font-mono text-base font-bold text-emerald-600">{rupiah(penjualanTunai)}</span>
+            <span className="text-[10px] text-slate-400 block mt-0.5">Hanya pembayaran kasir metode Tunai</span>
+          </div>
+
+          <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3">
+            <span className="text-[10px] text-blue-600 uppercase font-semibold block">
+              {isHari ? "Fisik Laci Saat Ini (Est.)" : "Estimasi Diambil Owner"}
+            </span>
+            <span className="font-mono text-base font-bold text-blue-700">
+              {isHari ? rupiah(uangLaci) : rupiah(diambilOwner)}
+            </span>
+            <span className="text-[10px] text-blue-500 block mt-0.5">
+              {isHari ? "Modal awal + Arus tunai hari ini" : "Total arus tunai harian di atas modal"}
+            </span>
+          </div>
+
+          <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+            <span className="text-[10px] text-slate-400 uppercase font-semibold block">Disisakan di Laci</span>
+            <span className="font-mono text-base font-bold text-slate-800">{rupiah(settings.kasAwal)}</span>
+            <span className="text-[10px] text-slate-400 block mt-0.5">Standar siap pakai shift berikutnya</span>
+          </div>
+        </div>
       </div>
-      {sub && <div className="mt-0.5 text-[11px] leading-tight text-slate-400">{sub}</div>}
+
+      {/* Belanja / Biaya Owner */}
+      <BelanjaClient rows={purchases} bahans={packs} />
+
+      {/* Kas Masuk / Keluar Manual */}
+      <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
+        <CashClient defaultDate={today} />
+
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm space-y-0 h-fit">
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 className="font-bold text-slate-900 text-sm">Rincian Kas Masuk &amp; Keluar Manual</h3>
+            <span className="text-xs text-slate-500">{entries.length} catatan pada periode ini</span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50/80 text-slate-500 font-semibold border-b border-slate-200">
+                <tr>
+                  <th className="py-3 px-4">Waktu</th>
+                  <th className="py-3 px-4">Tipe</th>
+                  <th className="py-3 px-4">Kategori &amp; Catatan</th>
+                  <th className="py-3 px-4 text-right">Nominal</th>
+                  <th className="py-3 px-4 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {entries.map((e) => (
+                  <tr key={e.id} className="hover:bg-slate-50/60 transition">
+                    <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">{waktu(e.createdAt)}</td>
+                    <td className="py-3 px-4">
+                      <span className={e.type === "MASUK" ? "pill-green" : "pill-red"}>
+                        {e.type}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="font-semibold text-slate-800">{e.category}</span>
+                      {e.note ? <span className="text-slate-400"> · {e.note}</span> : null}
+                    </td>
+                    <td
+                      className={`py-3 px-4 text-right font-mono font-bold ${
+                        e.type === "KELUAR" ? "text-rose-600" : "text-emerald-600"
+                      }`}
+                    >
+                      {e.type === "KELUAR" ? "−" : "+"}
+                      {rupiah(e.amount)}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <DeleteCash id={e.id} />
+                    </td>
+                  </tr>
+                ))}
+                {entries.length === 0 && (
+                  <tr>
+                    <td className="py-8 text-center text-slate-400" colSpan={5}>
+                      Belum ada catatan transaksi kas manual.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

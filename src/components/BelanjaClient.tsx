@@ -84,61 +84,82 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
   }
 
   return (
-    <div className="card space-y-3">
-      <div>
-        <h2 className="font-bold">💼 Biaya Owner (Belanja / Gaji)</h2>
-        <p className="text-xs text-slate-500">
-          Uang owner — <b>tidak dari laci kasir</b>, tidak mengurangi saldo kas. Terpisah di laporan.
-        </p>
+    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 text-xs">
+      <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+        <div>
+          <h3 className="font-bold text-slate-900 text-sm">Biaya Operasional Owner (Belanja Bahan &amp; Gaji)</h3>
+          <p className="text-[11px] text-slate-400">
+            Sumber dana owner / modal luar — <b>tidak memotong uang di laci kasir</b>.
+          </p>
+        </div>
+        <span className="pill-slate text-[10px]">Total {rows.length} Pencatatan</span>
       </div>
-      <form onSubmit={submit} className="grid grid-cols-2 gap-2 sm:grid-cols-7">
-        <select className="input" value={cat} onChange={(e) => setCat(e.target.value)}>
-          <option value="BELANJA">Belanja bulanan</option>
-          <option value="GAJI">Gaji karyawan</option>
-          <option value="LAIN">Lainnya</option>
+
+      <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-7 gap-3">
+        <select
+          className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
+          value={cat}
+          onChange={(e) => setCat(e.target.value)}
+        >
+          <option value="BELANJA">Belanja Bahan</option>
+          <option value="GAJI">Gaji Karyawan</option>
+          <option value="LAIN">Lain-lain</option>
         </select>
+
         <input
-          className="input col-span-2 sm:col-span-2"
-          placeholder="Nama barang (mis. Biji kopi 1kg)"
+          className="sm:col-span-2 bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 font-medium"
+          placeholder="Nama barang / keperluan (mis. Susu UHT 1 Dus)"
           value={itemName}
           onChange={(e) => setItemName(e.target.value)}
+          required
         />
+
         <input
-          className="input"
+          className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 font-mono text-center"
           type="number"
           min={1}
           placeholder="Qty"
           value={qty}
           onChange={(e) => setQty(e.target.value)}
         />
+
         <input
-          className="input"
-          placeholder="Satuan (kg/liter)"
+          className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500"
+          placeholder="Satuan (dus/kg/liter)"
           value={unit}
           onChange={(e) => setUnit(e.target.value)}
         />
+
         <input
-          className="input"
+          className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 font-mono font-bold"
           type="number"
           min={0}
-          placeholder="Harga satuan"
+          placeholder="Harga Satuan (Rp)"
           value={unitPrice}
           onChange={(e) => setUnitPrice(e.target.value)}
+          required
         />
-        <button className="btn-primary" disabled={busy}>
-          {busy ? "…" : `Catat${harga > 0 ? ` · ${rupiah(q * harga)}` : ""}`}
+
+        <button
+          type="submit"
+          className="py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-xs shadow-sm transition disabled:opacity-50"
+          disabled={busy}
+        >
+          {busy ? "Menyimpan..." : `Catat${harga > 0 ? ` (${rupiah(q * harga)})` : ""}`}
         </button>
+
         <input
-          className="input col-span-2 sm:col-span-7"
-          placeholder="Catatan (opsional — di mana belanja, dsb)"
+          className="sm:col-span-7 bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500"
+          placeholder="Catatan tambahan (opsional: toko tempat belanja, dsb)"
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
+
         {cat === "BELANJA" && bahans.length > 0 && (
-          <div className="col-span-2 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 p-2 text-xs sm:col-span-7">
-            <span className="font-medium text-slate-600">📦 Sekalian tambah stok bahan?</span>
+          <div className="sm:col-span-7 flex flex-wrap items-center gap-2 rounded-xl bg-blue-50/50 border border-blue-100 p-3 text-xs">
+            <span className="font-semibold text-blue-900">📦 Sekalian tambah ke stok inventori bahan?</span>
             <select
-              className="input h-8 w-auto flex-1 min-w-[140px] text-xs"
+              className="bg-white border border-slate-200 rounded-lg p-1.5 text-xs text-slate-800 focus:outline-none"
               value={bahanId}
               onChange={(e) => {
                 setBahanId(e.target.value);
@@ -146,35 +167,35 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
                 setBahanMode(b?.buyUnit ? "buy" : "base");
               }}
             >
-              <option value="">— tidak usah —</option>
+              <option value="">— Tidak menambah stok —</option>
               {bahans.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
                 </option>
               ))}
-              <option value="__new__">➕ Barang baru (buat bahan)…</option>
+              <option value="__new__">➕ Buat Bahan Baku Baru…</option>
             </select>
             {bahanId && (
               <>
                 <input
-                  className="input h-8 w-20 text-xs"
+                  className="w-20 bg-white border border-slate-200 rounded-lg p-1.5 text-xs font-mono text-center"
                   type="number"
                   min={0}
-                  placeholder="qty"
+                  placeholder="Jumlah"
                   value={bahanQty}
                   onChange={(e) => setBahanQty(e.target.value)}
                 />
                 {bahanId === "__new__" ? (
-                  <span className="flex flex-wrap items-center gap-1">
-                    <input className="input h-8 w-16 text-xs" placeholder="satuan" value={nbUnit} onChange={(e) => setNbUnit(e.target.value)} />
-                    <input className="input h-8 w-16 text-xs" placeholder="beli (ops.)" value={nbBuyUnit} onChange={(e) => setNbBuyUnit(e.target.value)} />
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <input className="w-20 bg-white border border-slate-200 rounded-lg p-1.5 text-xs" placeholder="Sat. Dasar" value={nbUnit} onChange={(e) => setNbUnit(e.target.value)} />
+                    <input className="w-20 bg-white border border-slate-200 rounded-lg p-1.5 text-xs" placeholder="Sat. Beli" value={nbBuyUnit} onChange={(e) => setNbBuyUnit(e.target.value)} />
                     {nbBuyUnit && (
                       <input
-                        className="input h-8 w-16 text-xs"
+                        className="w-16 bg-white border border-slate-200 rounded-lg p-1.5 text-xs font-mono"
                         type="number"
                         min={1}
                         title={`1 ${nbBuyUnit} = berapa ${nbUnit}?`}
-                        placeholder="×?"
+                        placeholder="Faktor ×"
                         value={nbBuyFactor}
                         onChange={(e) => setNbBuyFactor(e.target.value)}
                       />
@@ -183,48 +204,55 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
                 ) : (() => {
                   const b = bahans.find((x) => x.id === bahanId)!;
                   return b.buyUnit ? (
-                    <select className="input h-8 w-auto text-xs" value={bahanMode} onChange={(e) => setBahanMode(e.target.value)}>
+                    <select className="bg-white border border-slate-200 rounded-lg p-1.5 text-xs text-slate-800" value={bahanMode} onChange={(e) => setBahanMode(e.target.value)}>
                       <option value="buy">{b.buyUnit} (×{b.buyFactor} {b.unit})</option>
                       <option value="base">{b.unit}</option>
                     </select>
                   ) : (
-                    <span className="text-slate-500">{b.unit}</span>
+                    <span className="text-slate-600 font-semibold">{b.unit}</span>
                   );
                 })()}
-                {bahanId === "__new__" && itemName.trim() === "" && (
-                  <span className="text-orange-600">isi nama barang dulu (dipakai sbg nama bahan)</span>
-                )}
               </>
             )}
           </div>
         )}
       </form>
-      {msg && <p className="text-xs text-slate-600">{msg}</p>}
 
-      <div className="divide-y divide-slate-100">
+      {msg && (
+        <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700">
+          {msg}
+        </div>
+      )}
+
+      {/* Rincian Belanja List */}
+      <div className="divide-y divide-slate-100 pt-2">
         {rows.map((r) => (
-          <div key={r.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
+          <div key={r.id} className="flex items-center justify-between gap-3 py-2.5 text-xs">
             <div className="min-w-0">
-              <span className="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
-                {r.category === "GAJI" ? "GAJI" : r.category === "LAIN" ? "LAIN" : "BELANJA"}
-              </span>
-              <span className="font-medium">{r.itemName}</span>
-              <span className="text-slate-400">
-                {" "}
-                · {r.qty}
-                {r.unit || "x"} @ {rupiah(r.unitPrice)}
-              </span>
-              {r.note && <p className="truncate text-xs text-slate-400">{r.note}</p>}
+              <div className="flex items-center space-x-2">
+                <span className={r.category === "GAJI" ? "pill-blue" : r.category === "LAIN" ? "pill-slate" : "pill-amber"}>
+                  {r.category === "GAJI" ? "GAJI" : r.category === "LAIN" ? "LAINNYA" : "BELANJA"}
+                </span>
+                <span className="font-bold text-slate-900">{r.itemName}</span>
+                <span className="text-slate-400">
+                  · {r.qty} {r.unit || "x"} @ {rupiah(r.unitPrice)}
+                </span>
+              </div>
+              {r.note && <p className="truncate text-[11px] text-slate-400 mt-0.5">{r.note}</p>}
             </div>
-            <div className="text-right">
-              <p className="font-semibold tabular-nums">{rupiah(r.total)}</p>
-              <p className="text-xs text-slate-400">
-                {r.businessDate} · {r.userName || "-"}
+            <div className="text-right shrink-0">
+              <p className="font-mono font-bold text-slate-900">{rupiah(r.total)}</p>
+              <p className="text-[10px] text-slate-400">
+                {r.businessDate} · {r.userName || "Admin"}
               </p>
             </div>
           </div>
         ))}
-        {rows.length === 0 && <p className="py-2 text-sm text-slate-500">Belum ada belanja di periode ini.</p>}
+        {rows.length === 0 && (
+          <p className="py-6 text-center text-slate-400 text-xs">
+            Belum ada data belanja/biaya owner pada periode ini.
+          </p>
+        )}
       </div>
     </div>
   );

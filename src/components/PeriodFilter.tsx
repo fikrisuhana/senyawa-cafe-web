@@ -2,6 +2,7 @@
 
 import { useRouter, usePathname } from "next/navigation";
 import { useState } from "react";
+import { Calendar } from "lucide-react";
 
 export default function PeriodFilter({
   mode,
@@ -27,8 +28,8 @@ export default function PeriodFilter({
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-2">
-      <div className="flex overflow-hidden rounded-lg ring-1 ring-slate-200">
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <div className="flex p-0.5 bg-slate-100 rounded-lg border border-slate-200">
         {(["hari", "bulan"] as const).map((opt) => (
           <button
             key={opt}
@@ -36,8 +37,8 @@ export default function PeriodFilter({
               setM(opt);
               apply(opt);
             }}
-            className={`px-3 py-2 text-sm font-medium ${
-              m === opt ? "bg-brand-600 text-white" : "bg-white text-slate-600"
+            className={`px-3 py-1.5 rounded-md font-semibold transition ${
+              m === opt ? "bg-white text-blue-600 shadow-xs" : "text-slate-600 hover:text-slate-900"
             }`}
           >
             {opt === "hari" ? "Harian" : "Bulanan"}
@@ -45,25 +46,31 @@ export default function PeriodFilter({
         ))}
       </div>
       {m === "hari" ? (
-        <input
-          type="date"
-          className="input w-auto"
-          value={d}
-          onChange={(e) => {
-            setD(e.target.value);
-            apply("hari", e.target.value);
-          }}
-        />
+        <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+          <input
+            type="date"
+            className="bg-transparent text-xs text-slate-800 focus:outline-none font-medium"
+            value={d}
+            onChange={(e) => {
+              setD(e.target.value);
+              apply("hari", e.target.value);
+            }}
+          />
+        </div>
       ) : (
-        <input
-          type="month"
-          className="input w-auto"
-          value={mo}
-          onChange={(e) => {
-            setMo(e.target.value);
-            apply("bulan", d, e.target.value);
-          }}
-        />
+        <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+          <input
+            type="month"
+            className="bg-transparent text-xs text-slate-800 focus:outline-none font-medium"
+            value={mo}
+            onChange={(e) => {
+              setMo(e.target.value);
+              apply("bulan", undefined, e.target.value);
+            }}
+          />
+        </div>
       )}
     </div>
   );

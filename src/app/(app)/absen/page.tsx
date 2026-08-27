@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { getSettings, parseShifts } from "@/lib/settings";
 import { todayKey, labelHari } from "@/lib/bizday";
 import AbsenClient, { type EmpRow } from "@/components/AbsenClient";
+import { UserCheck } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -30,16 +31,22 @@ export default async function AbsenPage() {
   }));
 
   return (
-    <div className="mx-auto max-w-xl space-y-4">
-      <div>
-        <h1 className="text-lg font-bold">Absensi</h1>
-        <p className="text-xs text-slate-500">
-          Hari usaha: {labelHari(today)} · klik shift = tandai masuk (klik lagi = batal)
-        </p>
+    <div className="mx-auto max-w-2xl space-y-6">
+      <div className="flex items-center space-x-2.5">
+        <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+          <UserCheck className="w-4 h-4" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight">Presensi &amp; Absensi Harian</h2>
+          <p className="text-xs text-slate-500">
+            Hari usaha: <strong className="text-slate-800">{labelHari(today)}</strong> · Klik tombol shift untuk menandai kehadiran
+          </p>
+        </div>
       </div>
+
       {list.length === 0 ? (
-        <div className="card text-sm text-slate-500">
-          Belum ada karyawan. Minta admin menambah karyawan di menu Absensi.
+        <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-xs text-slate-500 shadow-sm">
+          Belum ada staf / karyawan terdaftar. Silakan tambahkan data karyawan di menu Admin &gt; Absensi.
         </div>
       ) : (
         <AbsenClient list={list} shifts={shifts.length ? shifts : ["Masuk"]} />

@@ -185,7 +185,7 @@ function Stat({
     <div className="card">
       <div className="text-xs text-slate-500">{label}</div>
       <div
-        className={`text-lg font-bold ${
+        className={`font-mono text-lg font-bold tabular-nums ${
           accent ? "text-brand-700" : bad ? "text-red-600" : good ? "text-emerald-600" : ""
         }`}
       >

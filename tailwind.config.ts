@@ -5,13 +5,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Aksen ala Vercel/Stripe (dari app-monitoring): blue-600.
         brand: {
-          50: "#f5f3ff",
-          100: "#ede9fe",
-          500: "#7c5cff",
-          600: "#6d45f0",
-          700: "#5b34d6",
+          50: "#eff6ff",
+          100: "#dbeafe",
+          500: "#3b82f6",
+          600: "#2563eb",
+          700: "#1d4ed8",
         },
+      },
+      fontFamily: {
+        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        mono: ["var(--font-jbmono)", "ui-monospace", "monospace"],
       },
     },
   },

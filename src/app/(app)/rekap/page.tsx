@@ -360,7 +360,7 @@ function Stat({
     <div className="card">
       <div className="text-xs text-slate-500">{label}</div>
       <div
-        className={`text-xl font-bold ${
+        className={`font-mono text-xl font-bold tabular-nums ${
           accent ? "text-brand-700" : good ? "text-emerald-600" : bad ? "text-red-600" : ""
         }`}
       >
@@ -384,7 +384,7 @@ function Line({ k, v }: { k: string; v: string }) {
   return (
     <div className="flex justify-between text-sm">
       <span className="text-slate-600">{k}</span>
-      <span className="font-medium">{v}</span>
+      <span className="font-mono font-medium tabular-nums">{v}</span>
     </div>
   );
 }

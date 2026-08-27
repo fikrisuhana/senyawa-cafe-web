@@ -16,7 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         logo={settings.logoEmoji}
         logoImage={settings.logoImage}
       />
-      <main className="mx-auto max-w-6xl p-4">{children}</main>
+      <main className="mx-auto max-w-6xl p-4 lg:pl-[17rem]">{children}</main>
     </div>
   );
 }

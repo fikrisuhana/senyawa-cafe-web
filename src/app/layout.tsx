@@ -1,4 +1,8 @@
 import "./globals.css";
+import { Inter, JetBrains_Mono } from "next/font/google";
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+const jbmono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jbmono", display: "swap" });
 import type { Metadata, Viewport } from "next";
 import { getSettings } from "@/lib/settings";
 
@@ -20,15 +24,15 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export const viewport: Viewport = {
-  themeColor: "#6d45f0",
+  themeColor: "#2563eb",
   width: "device-width",
   initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="id">
-      <body>{children}</body>
+    <html lang="id" className={`${inter.variable} ${jbmono.variable}`}>
+      <body className="font-sans">{children}</body>
     </html>
   );
 }

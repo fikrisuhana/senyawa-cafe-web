@@ -7,7 +7,7 @@
 }
 
 body {
-  @apply bg-slate-100 text-slate-900 antialiased;
+  @apply bg-slate-50 text-slate-900 antialiased;
 }
 
 .btn {
@@ -31,6 +31,15 @@ body {
 .label {
   @apply mb-1 block text-xs font-medium text-slate-600;
 }
+.pill {
+  @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold;
+}
+.pill-green { @apply pill bg-emerald-100 text-emerald-700; }
+.pill-red { @apply pill bg-rose-100 text-rose-700; }
+.pill-amber { @apply pill bg-amber-100 text-amber-700; }
+.pill-blue { @apply pill bg-blue-100 text-blue-700; }
+.pill-slate { @apply pill bg-slate-100 text-slate-600; }
+
 .th {
   @apply px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500;
 }
@@ -43,3 +52,9 @@ body {
     display: none !important;
   }
 }
+
+/* Scrollbar tipis ala referensi */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }

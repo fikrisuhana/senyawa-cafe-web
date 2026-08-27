@@ -2,31 +2,49 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
 import type { SessionUser } from "@/lib/auth";
+import {
+  LayoutGrid,
+  Receipt,
+  BarChart3,
+  Clock,
+  Utensils,
+  Ticket,
+  Package,
+  Wallet,
+  CalendarCheck,
+  Users,
+  Settings,
+  LogOut,
+  Coffee,
+} from "lucide-react";
 
-type LinkItem = { href: string; label: string; icon: string };
+type LinkItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
 
 const kasirLinks: LinkItem[] = [
-  { href: "/kasir", label: "Kasir", icon: "🧾" },
-  { href: "/rekap", label: "Rekap", icon: "📊" },
-  { href: "/absen", label: "Absen", icon: "⏱️" },
+  { href: "/kasir", label: "Kasir", icon: Receipt },
+  { href: "/rekap", label: "Rekap", icon: BarChart3 },
+  { href: "/absen", label: "Absen", icon: Clock },
 ];
 
-// Admin: link utama di depan, sisanya masuk dropdown "Kelola".
-const adminPrimary: LinkItem[] = [
-  { href: "/admin/dashboard", label: "Dashboard", icon: "📈" },
-  { href: "/kasir", label: "Kasir", icon: "🧾" },
-  { href: "/rekap", label: "Rekap", icon: "📊" },
+const adminMain: LinkItem[] = [
+  { href: "/admin/dashboard", label: "Dashboard", icon: LayoutGrid },
+  { href: "/kasir", label: "Kasir", icon: Receipt },
+  { href: "/rekap", label: "Rekap", icon: BarChart3 },
+  { href: "/absen", label: "Absen", icon: Clock },
 ];
-const adminMore: LinkItem[] = [
-  { href: "/admin/menu", label: "Menu", icon: "🍽️" },
-  { href: "/admin/voucher", label: "Voucher", icon: "🎟️" },
-  { href: "/admin/stok", label: "Stok", icon: "📦" },
-  { href: "/admin/keuangan", label: "Keuangan", icon: "💰" },
-  { href: "/admin/absensi", label: "Absensi", icon: "🗓️" },
-  { href: "/admin/users", label: "User", icon: "👥" },
-  { href: "/admin/pengaturan", label: "Setelan", icon: "⚙️" },
+
+const adminManage: LinkItem[] = [
+  { href: "/admin/menu", label: "Menu", icon: Utensils },
+  { href: "/admin/stok", label: "Stok & Bahan", icon: Package },
+  { href: "/admin/keuangan", label: "Keuangan", icon: Wallet },
+  { href: "/admin/absensi", label: "Absensi", icon: CalendarCheck },
+  { href: "/admin/voucher", label: "Voucher", icon: Ticket },
+];
+
+const adminSystem: LinkItem[] = [
+  { href: "/admin/users", label: "Pengguna", icon: Users },
+  { href: "/admin/pengaturan", label: "Setelan", icon: Settings },
 ];
 
 export default function Nav({
@@ -42,11 +60,9 @@ export default function Nav({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [openMore, setOpenMore] = useState(false);
   const isAdmin = user.role === "ADMIN";
-  const primary = isAdmin ? adminPrimary : kasirLinks;
+  const main = isAdmin ? adminMain : kasirLinks;
   const active = (href: string) => pathname === href || pathname.startsWith(href + "/");
-  const moreActive = adminMore.some((l) => active(l.href));
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -54,79 +70,135 @@ export default function Nav({
     router.refresh();
   }
 
-  return (
-    <header className="no-print sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2">
-        <div className="flex items-center gap-2 font-bold">
-          {logoImage ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoImage} alt="logo" className="h-7 w-7 rounded-full object-cover" />
-          ) : (
-            <span className="text-xl">{logo || "☕"}</span>
-          )}
-          <span className="hidden sm:inline">{storeName}</span>
-        </div>
+  const Brand = (
+    <div className="flex items-center gap-3 px-5">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-600 text-white shadow-sm">
+        {logoImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoImage} alt="logo" className="h-full w-full object-cover" />
+        ) : (
+          <Coffee className="h-4 w-4" />
+        )}
+      </div>
+      <div className="min-w-0">
+        <span className="block truncate text-[15px] font-bold leading-tight tracking-tight text-slate-900">
+          {storeName}
+        </span>
+        <span className="block text-[11px] font-medium text-slate-400">
+          {isAdmin ? "Admin Console" : "Kasir"}
+        </span>
+      </div>
+    </div>
+  );
 
-        <nav className="flex flex-1 items-center gap-1">
-          {primary.map((l) => (
+  const itemCls = (l: LinkItem) =>
+    `flex w-full items-center gap-3 rounded-lg px-3.5 py-2.5 text-sm font-medium transition ${
+      active(l.href)
+        ? "bg-brand-50 text-brand-600"
+        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+    }`;
+
+  const iconCls = (l: LinkItem) => `h-4 w-4 shrink-0 ${active(l.href) ? "text-brand-600" : "text-slate-400"}`;
+
+  const sidebarLinks = (
+    <>
+      <nav className="flex-1 space-y-1 overflow-y-auto p-4">
+        {main.map((l) => (
+          <Link key={l.href} href={l.href} className={itemCls(l)}>
+            <l.icon className={iconCls(l)} />
+            <span>{l.label}</span>
+          </Link>
+        ))}
+        {isAdmin && (
+          <>
+            <p className="px-3.5 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Kelola
+            </p>
+            {adminManage.map((l) => (
+              <Link key={l.href} href={l.href} className={itemCls(l)}>
+                <l.icon className={iconCls(l)} />
+                <span>{l.label}</span>
+              </Link>
+            ))}
+            <p className="px-3.5 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Sistem
+            </p>
+            {adminSystem.map((l) => (
+              <Link key={l.href} href={l.href} className={itemCls(l)}>
+                <l.icon className={iconCls(l)} />
+                <span>{l.label}</span>
+              </Link>
+            ))}
+          </>
+        )}
+      </nav>
+      <div className="border-t border-slate-100 p-4">
+        <div className="mb-2 flex items-center gap-3 px-1">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
+            {user.name.slice(0, 1).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold leading-tight text-slate-800">{user.name}</p>
+            <p className="text-[11px] text-slate-400">{user.role === "ADMIN" ? "Administrator" : "Kasir"}</p>
+          </div>
+        </div>
+        <button
+          onClick={logout}
+          className="flex w-full items-center gap-3 rounded-lg px-3.5 py-2 text-sm font-medium text-slate-500 transition hover:bg-rose-50 hover:text-rose-600"
+        >
+          <LogOut className="h-4 w-4" />
+          <span>Keluar</span>
+        </button>
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop: sidebar kiri tetap */}
+      <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-slate-200 bg-white lg:flex">
+        <div className="flex h-16 items-center border-b border-slate-100">{Brand}</div>
+        {sidebarLinks}
+      </aside>
+
+      {/* Mobile: top bar + menu scroll horizontal */}
+      <header className="no-print sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur lg:hidden">
+        <div className="flex h-14 items-center border-b border-slate-100">{Brand}</div>
+        <nav className="flex gap-1 overflow-x-auto px-3 py-2">
+          {main.map((l) => (
             <Link
               key={l.href}
               href={l.href}
-              className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ${
-                active(l.href) ? "bg-brand-600 text-white" : "text-slate-600 hover:bg-slate-100"
+              className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium ${
+                active(l.href) ? "bg-brand-50 text-brand-600" : "text-slate-600"
               }`}
             >
-              <span className="mr-1">{l.icon}</span>
+              <l.icon className="h-3.5 w-3.5" />
               {l.label}
             </Link>
           ))}
-
-          {isAdmin && (
-            <div className="relative">
-              <button
-                onClick={() => setOpenMore((v) => !v)}
-                className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ${
-                  moreActive ? "bg-brand-600 text-white" : "text-slate-600 hover:bg-slate-100"
+          {isAdmin &&
+            [...adminManage, ...adminSystem].map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium ${
+                  active(l.href) ? "bg-brand-50 text-brand-600" : "text-slate-600"
                 }`}
               >
-                🛠️ Kelola ▾
-              </button>
-              {openMore && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setOpenMore(false)} />
-                  <div className="absolute left-0 z-20 mt-1 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
-                    {adminMore.map((l) => (
-                      <Link
-                        key={l.href}
-                        href={l.href}
-                        onClick={() => setOpenMore(false)}
-                        className={`flex items-center gap-2 px-3 py-2 text-sm ${
-                          active(l.href)
-                            ? "bg-brand-50 font-medium text-brand-700"
-                            : "text-slate-700 hover:bg-slate-50"
-                        }`}
-                      >
-                        <span>{l.icon}</span>
-                        {l.label}
-                      </Link>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </nav>
-
-        <div className="flex items-center gap-2">
-          <div className="hidden text-right sm:block">
-            <div className="text-sm font-semibold leading-tight">{user.name}</div>
-            <div className="text-[11px] text-slate-500">{user.role}</div>
-          </div>
-          <button onClick={logout} className="btn-ghost !px-2 !py-1 text-xs">
+                <l.icon className="h-3.5 w-3.5" />
+                {l.label}
+              </Link>
+            ))}
+          <button
+            onClick={logout}
+            className="flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium text-rose-500"
+          >
+            <LogOut className="h-3.5 w-3.5" />
             Keluar
           </button>
-        </div>
-      </div>
-    </header>
+        </nav>
+      </header>
+    </>
   );
 }

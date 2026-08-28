@@ -4,6 +4,7 @@ import { getAuthFromRequest } from "@/lib/auth";
 import { appendTransactionToSheet } from "@/lib/gsheet";
 import { getSettings } from "@/lib/settings";
 import { businessDateKey } from "@/lib/bizday";
+import { shiftRanges, shiftNameForHour } from "@/lib/shifts";
 
 type InItem = { id: string; qty: number; optionIds?: string[]; note?: string };
 
@@ -34,6 +35,8 @@ export async function POST(req: Request) {
   const settings = await getSettings();
   const now = new Date();
   const businessDate = businessDateKey(now, settings.dayCutoffHour);
+  // Shift otomatis dari jam trx (Setting shiftHours, mis. Pagi 8-16 / Malam 16-24).
+  const shift = shiftNameForHour(now.getHours(), await shiftRanges());
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -137,6 +140,7 @@ export async function POST(req: Request) {
           orderType,
           note,
           businessDate,
+          shift,
           items: { create: txItems },
         },
       });

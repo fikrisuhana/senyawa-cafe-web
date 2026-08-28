@@ -138,6 +138,7 @@ model Transaction {
   orderType    String            @default("DINEIN") // DINEIN | TAKEAWAY
   note         String?
   businessDate String
+  shift        String? // nama shift saat trx dibuat (dinamis dari Setting shiftHours)
   status       String            @default("ACTIVE") // ACTIVE | VOID
   voidedAt     DateTime?
   voidedBy     String?

@@ -28,7 +28,7 @@ const DEFAULTS: Settings = {
   quickCash: "pas,20000,50000,100000",
   paperWidth: 58,
   shifts: "Pagi,Malam",
-  shiftHours: "9-17,17-24",
+  shiftHours: "8-16,16-24",
   kasAwal: 250000,
 };
 

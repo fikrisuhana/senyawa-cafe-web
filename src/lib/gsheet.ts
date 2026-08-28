@@ -2,6 +2,7 @@ import { google } from "googleapis";
 import { Readable } from "stream";
 import { randomBytes } from "crypto";
 import { prisma } from "./db";
+import { shiftRanges } from "./shifts";
 
 /**
  * Ekspor otomatis ke Google Sheet pakai SERVICE ACCOUNT (tanpa OAuth interaktif).
@@ -522,6 +523,7 @@ export async function ensureJadwalTab(): Promise<void> {
 }
 /**
  * Tab REKAP HARIAN — satu baris per hari-usaha (kayak rekap manual owner):
+ * per SHIFT (Pagi/Malam: trx + omzet, dari Setting shiftHours), lalu total hari:
  * omzet, per metode bayar, modal/HPP, untung, kas masuk/keluar, biaya owner,
  * dan estimasi uang tunai yang disisih owner hari itu. Ditulis ulang penuh
  * dari Postgres; dipanggil tiap ada transaksi/kas/belanja/void masuk.
@@ -543,23 +545,30 @@ export async function syncRekapHarian(): Promise<void> {
       });
     }
 
-    const [txs, kas, purchases] = await Promise.all([
+    const [txs, kas, purchases, ranges] = await Promise.all([
       prisma.transaction.findMany({
-        select: { businessDate: true, payment: true, total: true, discount: true, costTotal: true, status: true },
+        select: { businessDate: true, payment: true, total: true, discount: true, costTotal: true, status: true, shift: true },
       }),
       prisma.cashEntry.findMany({ select: { businessDate: true, type: true, amount: true } }),
       prisma.purchase.findMany({ select: { businessDate: true, total: true } }),
+      shiftRanges(),
     ]);
+    const shiftNames = ranges.map((r) => r.name);
 
     type Day = {
       trx: number; omzet: number; tunai: number; qris: number; transfer: number; lain: number;
       diskon: number; modal: number; voidCount: number; kasIn: number; kasOut: number; biaya: number;
+      perShift: Map<string, { trx: number; omzet: number }>;
     };
     const days = new Map<string, Day>();
     const day = (d: string) => {
       let x = days.get(d);
       if (!x) {
-        x = { trx: 0, omzet: 0, tunai: 0, qris: 0, transfer: 0, lain: 0, diskon: 0, modal: 0, voidCount: 0, kasIn: 0, kasOut: 0, biaya: 0 };
+        x = {
+          trx: 0, omzet: 0, tunai: 0, qris: 0, transfer: 0, lain: 0,
+          diskon: 0, modal: 0, voidCount: 0, kasIn: 0, kasOut: 0, biaya: 0,
+          perShift: new Map(),
+        };
         days.set(d, x);
       }
       return x;
@@ -574,6 +583,12 @@ export async function syncRekapHarian(): Promise<void> {
       d.omzet += t.total;
       d.diskon += t.discount;
       d.modal += t.costTotal;
+      if (t.shift) {
+        const s = d.perShift.get(t.shift) || { trx: 0, omzet: 0 };
+        s.trx++;
+        s.omzet += t.total;
+        d.perShift.set(t.shift, s);
+      }
       const p = (t.payment || "").toUpperCase();
       if (p.includes("TUNAI") || p.includes("CASH")) d.tunai += t.total;
       else if (p.includes("QRIS") || p.includes("QRI")) d.qris += t.total;
@@ -593,10 +608,16 @@ export async function syncRekapHarian(): Promise<void> {
       const untung = x.omzet - x.modal;
       const diambil = Math.max(0, x.tunai + x.kasIn - x.kasOut); // sisa tunai laci → est. diambil owner
       return [
-        d, x.trx, x.omzet, x.tunai, x.qris, x.transfer, x.lain, x.diskon,
+        d,
+        ...shiftNames.flatMap((n) => {
+          const s = x.perShift.get(n);
+          return [s?.trx ?? 0, s?.omzet ?? 0];
+        }),
+        x.trx, x.omzet, x.tunai, x.qris, x.transfer, x.lain, x.diskon,
         x.modal, untung, x.voidCount, x.kasIn, x.kasOut, x.biaya, diambil,
       ];
     });
+    const totalCols = 1 + shiftNames.length * 2 + 14;
 
     await sheets.spreadsheets.values.clear({ spreadsheetId: id, range: "'Rekap_Harian'!A1:Z" });
     await sheets.spreadsheets.values.update({
@@ -606,7 +627,9 @@ export async function syncRekapHarian(): Promise<void> {
       requestBody: {
         values: [
           [
-            "tanggal", "trx", "omzet", "tunai", "qris", "transfer", "lainnya",
+            "tanggal",
+            ...shiftNames.flatMap((n) => [`${n} trx`, `${n} omzet`]),
+            "trx", "omzet", "tunai", "qris", "transfer", "lainnya",
             "diskon", "modal (hpp)", "untung", "void", "kas masuk", "kas keluar",
             "biaya owner", "est. diambil owner",
           ],
@@ -623,7 +646,7 @@ export async function syncRekapHarian(): Promise<void> {
         requests: [
           {
             repeatCell: {
-              range: { sheetId: sid, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 15 },
+              range: { sheetId: sid, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: totalCols },
               cell: { userEnteredFormat: { textFormat: { bold: true } } },
               fields: "userEnteredFormat.textFormat.bold",
             },
@@ -637,7 +660,7 @@ export async function syncRekapHarian(): Promise<void> {
           ...(rows.length
             ? [{
                 repeatCell: {
-                  range: { sheetId: sid, startRowIndex: 1, endRowIndex: rows.length + 1, startColumnIndex: 1, endColumnIndex: 15 },
+                  range: { sheetId: sid, startRowIndex: 1, endRowIndex: rows.length + 1, startColumnIndex: 1, endColumnIndex: totalCols },
                   cell: { userEnteredFormat: { numberFormat: { type: "NUMBER", pattern: "#,##0" } } },
                   fields: "userEnteredFormat.numberFormat",
                 },

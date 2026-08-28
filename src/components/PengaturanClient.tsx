@@ -214,10 +214,10 @@ export default function PengaturanClient({ settings }: { settings: Settings }) {
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 font-mono"
                 value={f.shiftHours}
                 onChange={(e) => set("shiftHours", e.target.value)}
-                placeholder="9-17,17-24"
+                placeholder="8-16,16-24"
               />
               <p className="mt-1 text-[11px] text-slate-400">
-                Otomatis memilih tab shift yang sedang aktif di layar absensi. Contoh 2 shift: <code>9-17,17-24</code>.
+                Otomatis memilih tab shift yang sedang aktif di layar absensi. Contoh 2 shift: <code>8-16,16-24</code> (Pagi 08–16, Malam 16–24; hari usaha tutup jam 00.00).
               </p>
             </div>
 

@@ -14,6 +14,7 @@ export type BelanjaRow = {
   unitPrice: number;
   total: number;
   note: string | null;
+  notaUrl: string | null;
   userName: string | null;
 };
 
@@ -27,6 +28,7 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
   const [unit, setUnit] = useState("");
   const [unitPrice, setUnitPrice] = useState("");
   const [note, setNote] = useState("");
+  const [nota, setNota] = useState<File | null>(null);
   const [cat, setCat] = useState("BELANJA");
   const [bahanId, setBahanId] = useState("");
   const [bahanQty, setBahanQty] = useState("");
@@ -48,22 +50,32 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
       return;
     }
     setBusy(true);
-    const res = await fetch("/api/purchases", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        itemName, qty: q, unitPrice: harga, unit, note, category: cat,
-        ...(bahanId && Number(bahanQty) > 0
-          ? bahanId === "__new__"
-            ? {
-                restockQty: Number(bahanQty),
-                restockMode: nbBuyUnit ? "buy" : "base",
-                newBahan: { name: itemName, unit: nbUnit, buyUnit: nbBuyUnit, buyFactor: Number(nbBuyFactor) || 1 },
-              }
-            : { restockPackagingId: bahanId, restockQty: Number(bahanQty), restockMode: bahanMode || "buy" }
-          : {}),
-      }),
-    });
+    // multipart-form kalau ada nota (file), JSON kalau tidak — server dua-duanya diterima.
+    const payload: Record<string, string> = {
+      itemName, qty: String(q), unitPrice: String(harga), unit, note, category: cat,
+      ...(bahanId && Number(bahanQty) > 0
+        ? bahanId === "__new__"
+          ? {
+              restockQty: String(Number(bahanQty)),
+              restockMode: nbBuyUnit ? "buy" : "base",
+              newBahan: JSON.stringify({ name: itemName, unit: nbUnit, buyUnit: nbBuyUnit, buyFactor: Number(nbBuyFactor) || 1 }),
+            }
+          : { restockPackagingId: bahanId, restockQty: String(Number(bahanQty)), restockMode: bahanMode || "buy" }
+        : {}),
+    };
+    let res: Response;
+    if (nota) {
+      const fd = new FormData();
+      for (const [k, v] of Object.entries(payload)) fd.append(k, v);
+      fd.append("nota", nota);
+      res = await fetch("/api/purchases", { method: "POST", body: fd });
+    } else {
+      res = await fetch("/api/purchases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    }
     const body = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok) {
@@ -75,7 +87,8 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
     setUnit("");
     setUnitPrice("");
     setNote("");
-    setMsg(`✅ Tercatat — ${rupiah(body.total)} (biaya owner, bukan dari laci)${bahanId && Number(bahanQty) > 0 ? " + stok bahan bertambah" : ""}`);
+    setNota(null);
+    setMsg(`✅ Tercatat — ${rupiah(body.total)} (biaya owner, bukan dari laci)${bahanId && Number(bahanQty) > 0 ? " + stok bahan bertambah" : ""}${body.notaWarning || ""}`);
     setBahanId("");
     setBahanQty("");
     setNbBuyUnit("");
@@ -154,6 +167,26 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
+
+        <label className="sm:col-span-7 flex flex-wrap items-center gap-2 cursor-pointer rounded-lg border border-dashed border-slate-300 bg-slate-50/60 p-2.5 text-xs text-slate-500 hover:border-blue-400 hover:text-blue-700 transition">
+          <span className="font-semibold">🧾 Foto nota (opsional)</span>
+          <span className="truncate max-w-[16rem] text-slate-700 font-medium">{nota ? nota.name : "JPG/PNG/PDF maks 8MB — disimpan di Google Drive"}</span>
+          {nota && (
+            <button
+              type="button"
+              className="text-red-500 font-bold hover:underline"
+              onClick={(e) => { e.preventDefault(); setNota(null); }}
+            >
+              buang
+            </button>
+          )}
+          <input
+            type="file"
+            accept="image/*,application/pdf"
+            className="hidden"
+            onChange={(e) => setNota(e.target.files?.[0] || null)}
+          />
+        </label>
 
         {cat === "BELANJA" && bahans.length > 0 && (
           <div className="sm:col-span-7 flex flex-wrap items-center gap-2 rounded-xl bg-blue-50/50 border border-blue-100 p-3 text-xs">
@@ -239,6 +272,16 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
                 </span>
               </div>
               {r.note && <p className="truncate text-[11px] text-slate-400 mt-0.5">{r.note}</p>}
+              {r.notaUrl && (
+                <a
+                  href={r.notaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block mt-1 text-[11px] font-semibold text-blue-600 hover:underline"
+                >
+                  🧾 Lihat nota
+                </a>
+              )}
             </div>
             <div className="text-right shrink-0">
               <p className="font-mono font-bold text-slate-900">{rupiah(r.total)}</p>

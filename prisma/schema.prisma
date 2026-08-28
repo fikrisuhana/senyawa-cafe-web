@@ -234,6 +234,8 @@ model Purchase {
   unitPrice    Int // harga satuan
   total        Int
   note         String?
+  notaName     String? // nama file nota
+  notaUrl      String? // link Google Drive foto nota (di-share ke owner)
   userName     String?
   cashEntryId  String? // link ke CashEntry KELUAR yang dibuat otomatis
   createdAt    DateTime @default(now())

@@ -3,22 +3,64 @@ import { prisma } from "@/lib/db";
 import { getAuthFromRequest } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { businessDateKey } from "@/lib/bizday";
-import { syncOpsToSheet } from "@/lib/gsheet";
+import { syncOpsToSheet, uploadNotaToDrive } from "@/lib/gsheet";
+
+const NOTA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"];
+const NOTA_MAX = 8 * 1024 * 1024; // 8MB
 
 // Catat BIAYA OWNER: { itemName, qty, unitPrice, unit?, note?, category? }.
 // category: BELANJA (belanja bulanan/bahan) | GAJI (gaji karyawan) | LAIN.
 // Uang OWNER — TIDAK menyentuh kas laci kasir (bukan CashEntry).
+// Bisa dikirim sebagai JSON ATAU multipart/form-data (dengan file foto NOTA —
+// disimpan di Google Drive service account, BUKAN di server ini).
 export async function POST(req: Request) {
   const user = await getAuthFromRequest(req);
   if (!user) return NextResponse.json({ error: "Belum login" }, { status: 401 });
 
-  const b = await req.json().catch(() => ({}));
+  const ct = req.headers.get("content-type") || "";
+  let b: any = {};
+  let notaFile: { name: string; type: string; buf: Buffer } | null = null;
+  if (ct.includes("multipart/form-data")) {
+    const fd = await req.formData();
+    for (const k of ["itemName", "qty", "unitPrice", "unit", "note", "category", "restockPackagingId", "restockQty", "restockMode"]) {
+      const v = fd.get(k);
+      if (v != null) b[k] = v;
+    }
+    const nbRaw = fd.get("newBahan");
+    if (typeof nbRaw === "string" && nbRaw) {
+      try { b.newBahan = JSON.parse(nbRaw); } catch { /* ignore */ }
+    }
+    const f = fd.get("nota");
+    if (f && typeof f !== "string" && f.size > 0) {
+      if (f.size > NOTA_MAX) return NextResponse.json({ error: "File nota maksimal 8MB" }, { status: 400 });
+      if (!NOTA_TYPES.includes(f.type)) return NextResponse.json({ error: "Format nota: JPG/PNG/WebP/PDF" }, { status: 400 });
+      notaFile = { name: f.name || "nota", type: f.type, buf: Buffer.from(await f.arrayBuffer()) };
+    }
+  } else {
+    b = await req.json().catch(() => ({}));
+  }
+
   const itemName = String(b.itemName || "").trim();
   const qty = Math.max(1, Math.round(Number(b.qty) || 1));
   const unitPrice = Math.round(Number(b.unitPrice) || 0);
   const category = ["BELANJA", "GAJI", "LAIN"].includes(b.category) ? b.category : "BELANJA";
   if (!itemName) return NextResponse.json({ error: "Nama/deskripsi wajib" }, { status: 400 });
   if (unitPrice <= 0) return NextResponse.json({ error: "Nominal harus > 0" }, { status: 400 });
+
+  // Upload nota ke Drive SEBELUM create — kalau gagal tetap simpan catatan (nota opsional).
+  let notaUrl: string | null = null;
+  let notaName: string | null = null;
+  let notaWarning = "";
+  if (notaFile) {
+    try {
+      const up = await uploadNotaToDrive(notaFile.name, notaFile.type, notaFile.buf);
+      notaUrl = up.url;
+      notaName = up.name;
+    } catch (e) {
+      console.error("Upload nota gagal:", (e as Error).message);
+      notaWarning = " Catatan tersimpan TAPI upload nota gagal (cek Drive API / service account).";
+    }
+  }
 
   const settings = await getSettings();
   const businessDate = businessDateKey(new Date(), settings.dayCutoffHour);
@@ -34,6 +76,8 @@ export async function POST(req: Request) {
       unitPrice,
       total,
       note: b.note ? String(b.note).slice(0, 200) : null,
+      notaUrl,
+      notaName,
       userName: user.name,
     },
   });
@@ -88,6 +132,6 @@ export async function POST(req: Request) {
     }
   }
 
-  void syncOpsToSheet(); // mirror ke Google Sheet (tab Belanja + Restok_Log)
-  return NextResponse.json({ ok: true, id: p.id, total });
+  void syncOpsToSheet(); // mirror ke Google Sheet (tab Belanja + Restok_Log + Rekap_Harian)
+  return NextResponse.json({ ok: true, id: p.id, total, notaUrl, notaWarning });
 }

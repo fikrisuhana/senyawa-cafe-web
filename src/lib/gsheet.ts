@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { Readable } from "stream";
 import { prisma } from "./db";
 
 /**
@@ -57,6 +58,48 @@ export function sheetUrl(id: string): string {
 /** Email service account (buat ditampilkan di web: owner share sheet ke email ini). */
 export function serviceAccountEmail(): string {
   return creds()?.client_email || "";
+}
+
+async function _sheetIdByTitle(id: string, sheets: any, title: string): Promise<number> {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: id });
+  const s = (meta.data.sheets || []).find((x: any) => x.properties?.title === title);
+  return s?.properties?.sheetId ?? 0;
+}
+
+/**
+ * Upload foto NOTA belanja ke Google Drive pakai service account — file TIDAK
+ * disimpan di server. Langsung di-share ke OWNER_EMAIL (reader) biar muncul di
+ * Drive owner. Kalau env DRIVE_FOLDER_ID di-set (folder owner di-share ke SA),
+ * nota dikumpulkan rapi ke situ. Balikin webViewLink untuk kolom "nota" di Sheet.
+ */
+export async function uploadNotaToDrive(
+  fileName: string,
+  mimeType: string,
+  buf: Buffer,
+): Promise<{ url: string; name: string }> {
+  const auth = jwt();
+  if (!auth) throw new Error("Service account Google belum dikonfigurasi");
+  const drive = google.drive({ version: "v3", auth });
+  const parents = process.env.DRIVE_FOLDER_ID ? [process.env.DRIVE_FOLDER_ID] : undefined;
+  const f = await drive.files.create({
+    requestBody: { name: `nota-${Date.now()}-${fileName}`.slice(0, 150), parents },
+    media: { mimeType, body: Readable.from(buf) },
+    fields: "id,name,webViewLink",
+  });
+  if (!f.data.id || !f.data.webViewLink) throw new Error("Upload Drive gagal");
+  const owner = process.env.OWNER_EMAIL;
+  if (owner) {
+    try {
+      await drive.permissions.create({
+        fileId: f.data.id,
+        requestBody: { role: "reader", type: "user", emailAddress: owner },
+        sendNotificationEmail: false,
+      });
+    } catch (e) {
+      console.error("Share nota ke owner gagal:", (e as Error).message);
+    }
+  }
+  return { url: f.data.webViewLink, name: f.data.name || fileName };
 }
 
 /** Ambil ID dari URL Google Sheet (atau kembalikan apa adanya kalau sudah ID). */
@@ -337,6 +380,137 @@ export async function ensureJadwalTab(): Promise<void> {
     console.error("ensureJadwalTab gagal:", (e as Error).message);
   }
 }
+/**
+ * Tab REKAP HARIAN — satu baris per hari-usaha (kayak rekap manual owner):
+ * omzet, per metode bayar, modal/HPP, untung, kas masuk/keluar, biaya owner,
+ * dan estimasi uang tunai yang disisih owner hari itu. Ditulis ulang penuh
+ * dari Postgres; dipanggil tiap ada transaksi/kas/belanja/void masuk.
+ */
+export async function syncRekapHarian(): Promise<void> {
+  try {
+    if (!sheetEnabled()) return;
+    const id = await getOrCreateSheet();
+    if (!id) return;
+    const auth = jwt();
+    if (!auth) return;
+    const sheets = google.sheets({ version: "v4", auth });
+
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: id });
+    if (!(meta.data.sheets || []).some((x) => x.properties?.title === "Rekap_Harian")) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: id,
+        requestBody: { requests: [{ addSheet: { properties: { title: "Rekap_Harian" } } }] },
+      });
+    }
+
+    const [txs, kas, purchases] = await Promise.all([
+      prisma.transaction.findMany({
+        select: { businessDate: true, payment: true, total: true, discount: true, costTotal: true, status: true },
+      }),
+      prisma.cashEntry.findMany({ select: { businessDate: true, type: true, amount: true } }),
+      prisma.purchase.findMany({ select: { businessDate: true, total: true } }),
+    ]);
+
+    type Day = {
+      trx: number; omzet: number; tunai: number; qris: number; transfer: number; lain: number;
+      diskon: number; modal: number; voidCount: number; kasIn: number; kasOut: number; biaya: number;
+    };
+    const days = new Map<string, Day>();
+    const day = (d: string) => {
+      let x = days.get(d);
+      if (!x) {
+        x = { trx: 0, omzet: 0, tunai: 0, qris: 0, transfer: 0, lain: 0, diskon: 0, modal: 0, voidCount: 0, kasIn: 0, kasOut: 0, biaya: 0 };
+        days.set(d, x);
+      }
+      return x;
+    };
+    for (const t of txs) {
+      const d = day(t.businessDate);
+      if (t.status === "VOID") {
+        d.voidCount++;
+        continue;
+      }
+      d.trx++;
+      d.omzet += t.total;
+      d.diskon += t.discount;
+      d.modal += t.costTotal;
+      const p = (t.payment || "").toUpperCase();
+      if (p.includes("TUNAI") || p.includes("CASH")) d.tunai += t.total;
+      else if (p.includes("QRIS") || p.includes("QRI")) d.qris += t.total;
+      else if (p.includes("TRANSFER")) d.transfer += t.total;
+      else d.lain += t.total;
+    }
+    for (const k of kas) {
+      const d = day(k.businessDate);
+      if (k.type === "MASUK") d.kasIn += k.amount;
+      else d.kasOut += k.amount;
+    }
+    for (const p of purchases) day(p.businessDate).biaya += p.total;
+
+    const dates = [...days.keys()].filter(Boolean).sort();
+    const rows = dates.map((d) => {
+      const x = days.get(d)!;
+      const untung = x.omzet - x.modal;
+      const diambil = Math.max(0, x.tunai + x.kasIn - x.kasOut); // sisa tunai laci → est. diambil owner
+      return [
+        d, x.trx, x.omzet, x.tunai, x.qris, x.transfer, x.lain, x.diskon,
+        x.modal, untung, x.voidCount, x.kasIn, x.kasOut, x.biaya, diambil,
+      ];
+    });
+
+    await sheets.spreadsheets.values.clear({ spreadsheetId: id, range: "'Rekap_Harian'!A1:Z" });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: id,
+      range: "'Rekap_Harian'!A1",
+      valueInputOption: "USER_ENTERED", // tanggal jadi DATE asli
+      requestBody: {
+        values: [
+          [
+            "tanggal", "trx", "omzet", "tunai", "qris", "transfer", "lainnya",
+            "diskon", "modal (hpp)", "untung", "void", "kas masuk", "kas keluar",
+            "biaya owner", "est. diambil owner",
+          ],
+          ...rows,
+        ],
+      },
+    });
+
+    // Rapiin: header tebal + bekukan baris 1 + kolom angka format ribuan.
+    const sid = await _sheetIdByTitle(id, sheets, "Rekap_Harian");
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: id,
+      requestBody: {
+        requests: [
+          {
+            repeatCell: {
+              range: { sheetId: sid, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 15 },
+              cell: { userEnteredFormat: { textFormat: { bold: true } } },
+              fields: "userEnteredFormat.textFormat.bold",
+            },
+          },
+          {
+            updateSheetProperties: {
+              properties: { sheetId: sid, gridProperties: { frozenRowCount: 1 } },
+              fields: "gridProperties.frozenRowCount",
+            },
+          },
+          ...(rows.length
+            ? [{
+                repeatCell: {
+                  range: { sheetId: sid, startRowIndex: 1, endRowIndex: rows.length + 1, startColumnIndex: 1, endColumnIndex: 15 },
+                  cell: { userEnteredFormat: { numberFormat: { type: "NUMBER", pattern: "#,##0" } } },
+                  fields: "userEnteredFormat.numberFormat",
+                },
+              }]
+            : []),
+        ],
+      },
+    });
+  } catch (e) {
+    console.error("syncRekapHarian gagal:", (e as Error).message);
+  }
+}
+
 export async function markVoidedInSheet(code: string): Promise<void> {
   try {
     if (!sheetEnabled()) return;
@@ -356,6 +530,7 @@ export async function markVoidedInSheet(code: string): Promise<void> {
       valueInputOption: "RAW",
       requestBody: { values: [["VOID"]] },
     });
+    void syncRekapHarian(); // baris hari itu berubah (omzet/void)
   } catch (e) {
     console.error("markVoidedInSheet gagal:", (e as Error).message);
   }
@@ -385,6 +560,7 @@ export async function appendTransactionToSheet(trxId: string): Promise<void> {
         ]],
       },
     });
+    void syncRekapHarian(); // baris rekap hari itu berubah
   } catch (e) {
     console.error("appendTransactionToSheet gagal:", (e as Error).message);
   }
@@ -417,6 +593,7 @@ export async function rebuildSheet(): Promise<string | null> {
   await syncCatalogToSheet();
   await syncOpsToSheet();
   await ensureJadwalTab(); // matriks absensi per shift
+  await syncRekapHarian(); // rekap per hari
   return id;
 }
 
@@ -485,10 +662,11 @@ export async function syncOpsToSheet(): Promise<void> {
 
     await writeTab(
       "Belanja",
-      ["hari_usaha", "waktu", "kategori", "barang", "qty", "satuan", "harga_satuan", "total", "oleh", "catatan"],
+      ["hari_usaha", "waktu", "kategori", "barang", "qty", "satuan", "harga_satuan", "total", "oleh", "catatan", "nota"],
       belanja.map((b) => [
         b.businessDate, new Date(b.createdAt).toISOString(), b.category || "BELANJA", b.itemName, b.qty,
         b.unit || "", b.unitPrice, b.total, b.userName || "", b.note || "",
+        b.notaUrl ? `=HYPERLINK("${b.notaUrl}","Lihat nota")` : "",
       ]),
     );
 
@@ -501,6 +679,7 @@ export async function syncOpsToSheet(): Promise<void> {
         r.after, r.userName || "", r.note || "",
       ]),
     );
+    await syncRekapHarian(); // kas/belanja berubah → rekap ikut
   } catch (e) {
     console.error("syncOpsToSheet gagal:", (e as Error).message);
   }

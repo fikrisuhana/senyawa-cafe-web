@@ -761,7 +761,7 @@ export async function syncCatalogToSheet(): Promise<void> {
 
     const [menus, pkgs, vouchers, employees] = await Promise.all([
       prisma.menuItem.findMany({
-        orderBy: [{ active: "desc" }, { sortOrder: "asc" }],
+        orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
         include: { stocks: { include: { packaging: true } }, variantGroups: { include: { options: true } } },
       }),
       prisma.packaging.findMany({ orderBy: { name: "asc" } }),
@@ -769,22 +769,154 @@ export async function syncCatalogToSheet(): Promise<void> {
       prisma.employee.findMany({ orderBy: { name: "asc" } }),
     ]);
 
-    await writeTab(
-      "Menu",
-      ["nama", "kategori", "harga", "modal", "aktif", "urutan", "bahan (per porsi)", "varian"],
-      menus.map((m) => [
+    // MENU & HARGA — gaya "menu kafe" (kayak contoh owner): judul besar, header
+    // hijau tua teks putih, baris data diwarnain per kategori (minuman hijau /
+    // cemilan kuning / makanan krem), harga format Rp, border tipis, freeze header.
+    {
+      const store = ((await getSetting("storeName")) || "Ruang Senyawa").toUpperCase();
+      const BULAN = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+      const now = new Date();
+      const COLS = 8; // A..H
+      const menuRows = menus.map((m, i) => [
+        i + 1,
         m.name,
         m.category,
-        m.price,
         m.cost,
-        m.active ? "YA" : "TIDAK",
-        m.sortOrder,
-        m.stocks.map((s) => `${s.packaging.name} x${s.qty}`).join(", "),
+        m.price,
         m.variantGroups
-          .map((g) => `${g.name}: ${g.options.map((o) => `${o.name}${o.priceDelta ? ` +${o.priceDelta}` : ""}`).join(" / ")}`)
+          .map((g) => `${g.name}: ${g.options.map((o) => (o.priceDelta ? `${o.name} +${o.priceDelta}` : o.name)).join(" / ")}`)
           .join("; "),
-      ]),
-    );
+        m.stocks.map((s) => `${s.packaging.name} x${s.qty}`).join(", "),
+        m.active ? "" : "TIDAK DIJUAL",
+      ]);
+      await sheets.spreadsheets.values.clear({ spreadsheetId: sheetId, range: "'Menu'!A1:Z" });
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: sheetId,
+        range: "'Menu'!A1",
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: [
+            ["MENU & HARGA"],
+            [store],
+            [`Update: ${BULAN[now.getMonth()]} ${now.getFullYear()}`],
+            [],
+            ["No.", "Nama Menu", "Jenis Menu", "HPP Menu", "Harga Menu", "Varian", "Bahan (per porsi)", "Keterangan"],
+            ...menuRows,
+          ],
+        },
+      });
+
+      const hex = (h: number) => ({ red: ((h >> 16) & 255) / 255, green: ((h >> 8) & 255) / 255, blue: (h & 255) / 255 });
+      const bandColor = (cat: string) => {
+        const c = (cat || "").toLowerCase();
+        const has = (...xs: string[]) => xs.some((x) => c.includes(x));
+        if (has("minuman", "kopi", "teh", "susu", "es ")) return hex(0xd9ead3); // hijau muda
+        if (has("cemilan", "snack", "dessert", "roti", "pastry", "manis")) return hex(0xfff2cc); // kuning muda
+        if (has("berat", "makan", "nasi", "mie", "ayam", "daging")) return hex(0xfce5cd); // krem
+        return hex(0xdeeaf6); // kategori lain → biru muda
+      };
+      // Baris data berurutan per kategori → gabung jadi band satu warna.
+      const bands: { start: number; end: number; color: ReturnType<typeof bandColor> }[] = [];
+      menus.forEach((m, i) => {
+        const color = bandColor(m.category);
+        const last = bands[bands.length - 1];
+        const same =
+          last &&
+          last.color.red === color.red &&
+          last.color.green === color.green &&
+          last.color.blue === color.blue;
+        if (same) last.end = 6 + i + 1;
+        else bands.push({ start: 6 + i, end: 6 + i + 1, color });
+      });
+
+      const sid = await _sheetIdByTitle(sheetId, sheets, "Menu");
+      const THIN = { style: "SOLID", width: 1, color: { red: 0.73, green: 0.73, blue: 0.73 } };
+      const grid = (r0: number, r1: number, c0 = 0, c1 = COLS) => ({ sheetId: sid, startRowIndex: r0, endRowIndex: r1, startColumnIndex: c0, endColumnIndex: c1 });
+      const requests: any[] = [
+        { unmergeRanges: { ranges: [{ sheetId: sid }] } }, // layout bisa berubah antar versi
+        // Reset format lama dulu (biar gak ada sisa warna/merge versi sebelumnya).
+        { repeatCell: { range: grid(0, menuRows.length + 55), cell: { userEnteredFormat: {} }, fields: "userEnteredFormat" } },
+        { mergeCells: { range: grid(0, 1), mergeType: "MERGE_ROWS" } },
+        { mergeCells: { range: grid(1, 2), mergeType: "MERGE_ROWS" } },
+        { mergeCells: { range: grid(2, 3), mergeType: "MERGE_ROWS" } },
+        {
+          repeatCell: {
+            range: grid(0, 1),
+            cell: { userEnteredFormat: { horizontalAlignment: "CENTER", textFormat: { bold: true, fontSize: 16 } } },
+            fields: "userEnteredFormat.horizontalAlignment,userEnteredFormat.textFormat",
+          },
+        },
+        {
+          repeatCell: {
+            range: grid(1, 2),
+            cell: { userEnteredFormat: { horizontalAlignment: "CENTER", textFormat: { bold: true, fontSize: 12 } } },
+            fields: "userEnteredFormat.horizontalAlignment,userEnteredFormat.textFormat",
+          },
+        },
+        {
+          repeatCell: {
+            range: grid(2, 3),
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: "CENTER",
+                textFormat: { italic: true, foregroundColor: { red: 0.45, green: 0.45, blue: 0.45 } },
+              },
+            },
+            fields: "userEnteredFormat.horizontalAlignment,userEnteredFormat.textFormat",
+          },
+        },
+        {
+          // Header hijau tua + teks putih.
+          repeatCell: {
+            range: grid(4, 5),
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.216, green: 0.337, blue: 0.137 },
+                horizontalAlignment: "CENTER",
+                verticalAlignment: "MIDDLE",
+                textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                wrapStrategy: "WRAP",
+              },
+            },
+            fields: "userEnteredFormat(backgroundColor,horizontalAlignment,verticalAlignment,textFormat,wrapStrategy)",
+          },
+        },
+        ...bands.map((b) => ({
+          repeatCell: {
+            range: grid(b.start, b.end),
+            cell: { userEnteredFormat: { backgroundColor: b.color } },
+            fields: "userEnteredFormat.backgroundColor",
+          },
+        })),
+        ...(menuRows.length
+          ? [
+              {
+                // HPP & Harga → format Rupiah.
+                repeatCell: {
+                  range: grid(5, menuRows.length + 5, 3, 5),
+                  cell: { userEnteredFormat: { numberFormat: { type: "NUMBER", pattern: '"Rp"#,##0' } } },
+                  fields: "userEnteredFormat.numberFormat",
+                },
+              },
+              {
+                updateBorders: {
+                  range: grid(4, menuRows.length + 5),
+                  top: THIN, bottom: THIN, left: THIN, right: THIN, innerHorizontal: THIN, innerVertical: THIN,
+                },
+              },
+            ]
+          : []),
+        { updateSheetProperties: { properties: { sheetId: sid, gridProperties: { frozenRowCount: 5 } }, fields: "gridProperties.frozenRowCount" } },
+        ...[40, 230, 130, 110, 110, 220, 220, 130].map((px, i) => ({
+          updateDimensionProperties: {
+            range: { sheetId: sid, dimension: "COLUMNS", startIndex: i, endIndex: i + 1 },
+            properties: { pixelSize: px },
+            fields: "pixelSize",
+          },
+        })),
+      ];
+      await sheets.spreadsheets.batchUpdate({ spreadsheetId: sheetId, requestBody: { requests } });
+    }
 
     await writeTab(
       "Bahan",

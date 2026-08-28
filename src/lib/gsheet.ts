@@ -68,10 +68,11 @@ async function _sheetIdByTitle(id: string, sheets: any, title: string): Promise<
 
 /**
  * Upload foto NOTA belanja ke Google Drive pakai service account — file TIDAK
- * disimpan di server. Syarat (satu kali): owner bikin folder di Drive-nya
- * (mis. "Nota POS"), share ke email SA sebagai Editor, ID folder di .env
- * DRIVE_FOLDER_ID. File masuk folder owner (quota owner) → otomatis kelihatan
- * di Drive owner; webViewLink-nya dipakai di kolom "nota" tab Belanja Sheet.
+ * disimpan di server. Syarat (set dari web): owner bikin folder di Drive-nya
+ * (mis. "Nota POS"), share ke email SA sebagai Editor, lalu tempel URL foldernya
+ * di Admin → Pengaturan (disimpan di Setting 'drive_folder_id').
+ * File masuk folder owner (quota owner) → otomatis kelihatan di Drive owner;
+ * webViewLink-nya dipakai di kolom "nota" tab Belanja Sheet.
  */
 export async function uploadNotaToDrive(
   fileName: string,
@@ -83,14 +84,15 @@ export async function uploadNotaToDrive(
   // SA TIDAK punya storage quota di My Drive-nya sendiri — file HARUS masuk folder
   // milik akun asli (owner) yang di-share ke SA sebagai Editor. Tanpa itu Google
   // menolak: "Service Accounts do not have storage quota".
-  if (!process.env.DRIVE_FOLDER_ID) {
+  const folderId = await currentDriveFolderId();
+  if (!folderId) {
     throw new Error(
-      `DRIVE_FOLDER_ID belum diset: buat folder "Nota POS" di Drive owner, share (Editor) ke ${auth.email}, lalu taruh ID foldernya di .env`,
+      `Folder nota belum diset — Admin → Pengaturan → tempel URL folder Drive yang di-share (Editor) ke ${auth.email}`,
     );
   }
   const drive = google.drive({ version: "v3", auth });
   const f = await drive.files.create({
-    requestBody: { name: `nota-${Date.now()}-${fileName}`.slice(0, 150), parents: [process.env.DRIVE_FOLDER_ID] },
+    requestBody: { name: `nota-${Date.now()}-${fileName}`.slice(0, 150), parents: [folderId] },
     media: { mimeType, body: Readable.from(buf) },
     fields: "id,name,webViewLink",
   });
@@ -98,11 +100,50 @@ export async function uploadNotaToDrive(
   return { url: f.data.webViewLink, name: f.data.name || fileName };
 }
 
+/**
+ * Simpan folder nota dari URL/ID (dipanggil dari admin web). Sekalian VERIFIKASI:
+ * folder harus bisa dibuka SA & SA boleh nulis (share Editor) — kalau tidak,
+ * balikin error yang jelas biar owner tahu harus share dulu.
+ */
+export async function setDriveFolderFrom(input: string): Promise<{ id: string; name: string }> {
+  const auth = jwt();
+  if (!auth) throw new Error("Service account Google belum dikonfigurasi");
+  const id = extractDriveFolderId(input);
+  if (!id) throw new Error("URL / ID folder Drive kosong");
+  const drive = google.drive({ version: "v3", auth });
+  let meta;
+  try {
+    meta = await drive.files.get({ fileId: id, fields: "id,name,mimeType,capabilities/canAddChildren" });
+  } catch {
+    throw new Error(`Folder tidak bisa dibuka service account — share folder ke ${auth.email} sebagai Editor dulu`);
+  }
+  if (meta.data.mimeType !== "application/vnd.google-apps.folder") {
+    throw new Error("Yang ditempel bukan folder Google Drive");
+  }
+  if (meta.data.capabilities?.canAddChildren === false) {
+    throw new Error(`Service account belum boleh menulis ke folder ini — share sebagai Editor ke ${auth.email}`);
+  }
+  await setSetting("drive_folder_id", id);
+  return { id, name: meta.data.name || id };
+}
+
 /** Ambil ID dari URL Google Sheet (atau kembalikan apa adanya kalau sudah ID). */
 export function extractSheetId(input: string): string {
   const s = (input || "").trim();
   const m = s.match(/\/d\/([a-zA-Z0-9_-]+)/);
   return m ? m[1] : s;
+}
+
+/** Ambil ID folder dari URL Google Drive (…/folders/ID) atau kembalikan apa adanya. */
+export function extractDriveFolderId(input: string): string {
+  const s = (input || "").trim();
+  const m = s.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : s;
+}
+
+/** ID folder nota aktif: Setting DB (atur dari web) → fallback env DRIVE_FOLDER_ID. */
+export async function currentDriveFolderId(): Promise<string> {
+  return (((await getSetting("drive_folder_id")) || process.env.DRIVE_FOLDER_ID || "").trim());
 }
 
 /** ID sheet aktif: dari Setting DB (bisa diubah web) → fallback env GSHEET_ID. */

@@ -68,9 +68,10 @@ async function _sheetIdByTitle(id: string, sheets: any, title: string): Promise<
 
 /**
  * Upload foto NOTA belanja ke Google Drive pakai service account — file TIDAK
- * disimpan di server. Langsung di-share ke OWNER_EMAIL (reader) biar muncul di
- * Drive owner. Kalau env DRIVE_FOLDER_ID di-set (folder owner di-share ke SA),
- * nota dikumpulkan rapi ke situ. Balikin webViewLink untuk kolom "nota" di Sheet.
+ * disimpan di server. Syarat (satu kali): owner bikin folder di Drive-nya
+ * (mis. "Nota POS"), share ke email SA sebagai Editor, ID folder di .env
+ * DRIVE_FOLDER_ID. File masuk folder owner (quota owner) → otomatis kelihatan
+ * di Drive owner; webViewLink-nya dipakai di kolom "nota" tab Belanja Sheet.
  */
 export async function uploadNotaToDrive(
   fileName: string,
@@ -79,26 +80,21 @@ export async function uploadNotaToDrive(
 ): Promise<{ url: string; name: string }> {
   const auth = jwt();
   if (!auth) throw new Error("Service account Google belum dikonfigurasi");
+  // SA TIDAK punya storage quota di My Drive-nya sendiri — file HARUS masuk folder
+  // milik akun asli (owner) yang di-share ke SA sebagai Editor. Tanpa itu Google
+  // menolak: "Service Accounts do not have storage quota".
+  if (!process.env.DRIVE_FOLDER_ID) {
+    throw new Error(
+      `DRIVE_FOLDER_ID belum diset: buat folder "Nota POS" di Drive owner, share (Editor) ke ${auth.email}, lalu taruh ID foldernya di .env`,
+    );
+  }
   const drive = google.drive({ version: "v3", auth });
-  const parents = process.env.DRIVE_FOLDER_ID ? [process.env.DRIVE_FOLDER_ID] : undefined;
   const f = await drive.files.create({
-    requestBody: { name: `nota-${Date.now()}-${fileName}`.slice(0, 150), parents },
+    requestBody: { name: `nota-${Date.now()}-${fileName}`.slice(0, 150), parents: [process.env.DRIVE_FOLDER_ID] },
     media: { mimeType, body: Readable.from(buf) },
     fields: "id,name,webViewLink",
   });
   if (!f.data.id || !f.data.webViewLink) throw new Error("Upload Drive gagal");
-  const owner = process.env.OWNER_EMAIL;
-  if (owner) {
-    try {
-      await drive.permissions.create({
-        fileId: f.data.id,
-        requestBody: { role: "reader", type: "user", emailAddress: owner },
-        sendNotificationEmail: false,
-      });
-    } catch (e) {
-      console.error("Share nota ke owner gagal:", (e as Error).message);
-    }
-  }
   return { url: f.data.webViewLink, name: f.data.name || fileName };
 }
 

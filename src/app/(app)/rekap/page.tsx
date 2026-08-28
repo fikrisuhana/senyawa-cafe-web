@@ -3,9 +3,11 @@ import { getSession } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { todayKey } from "@/lib/bizday";
 import { resolvePeriod } from "@/lib/period";
+import { shiftRanges } from "@/lib/shifts";
 import { rupiah, waktu } from "@/lib/format";
 import Link from "next/link";
 import PeriodFilter from "@/components/PeriodFilter";
+import ShiftFilter from "@/components/ShiftFilter";
 import SpreadsheetCopy from "@/components/SpreadsheetCopy";
 import VoidButton from "@/components/VoidButton";
 import KasClient from "@/components/KasClient";
@@ -31,7 +33,7 @@ const PAGE_SIZE = 25;
 export default async function RekapPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mode?: string; date?: string; month?: string; page?: string }>;
+  searchParams: Promise<{ mode?: string; date?: string; month?: string; page?: string; shift?: string }>;
 }) {
   const user = await getSession();
   const isAdmin = user?.role === "ADMIN";
@@ -43,9 +45,13 @@ export default async function RekapPage({
     ? resolvePeriod(sp, settings.dayCutoffHour)
     : resolvePeriod({ mode: "hari", date: today }, settings.dayCutoffHour);
 
+  // Filter shift (Semua / Pagi / Malam) — nama shift dari Setting web.
+  const shiftNames = (await shiftRanges()).map((r) => r.name);
+  const shift = shiftNames.includes(sp.shift || "") ? sp.shift! : "";
+
   const [all, cashEntries] = await Promise.all([
     prisma.transaction.findMany({
-      where: { businessDate: period.filter },
+      where: { businessDate: period.filter, ...(shift ? { shift } : {}) },
       include: { items: true },
       orderBy: { createdAt: "desc" },
     }),
@@ -75,8 +81,13 @@ export default async function RekapPage({
   const perKategori = new Map<string, { qty: number; total: number }>();
   const perMetode = new Map<string, number>();
   const perKasir = new Map<string, { qty: number; total: number }>();
+  const perShift = new Map<string, { qty: number; total: number }>();
   for (const t of active) {
     perMetode.set(t.payment, (perMetode.get(t.payment) || 0) + t.total);
+    const sh = perShift.get(t.shift || "(tanpa shift)") || { qty: 0, total: 0 };
+    sh.qty += 1;
+    sh.total += t.total;
+    perShift.set(t.shift || "(tanpa shift)", sh);
     const k = perKasir.get(t.cashierName) || { qty: 0, total: 0 };
     k.qty += 1;
     k.total += t.total;
@@ -124,7 +135,7 @@ export default async function RekapPage({
   );
   const tsv = [tsvHeader.join("\t"), ...tsvRows].join("\n");
 
-  const qbase = `mode=${period.mode}&date=${period.date}&month=${period.month}`;
+  const qbase = `mode=${period.mode}&date=${period.date}&month=${period.month}${shift ? `&shift=${encodeURIComponent(shift)}` : ""}`;
 
   return (
     <div className="space-y-6">
@@ -136,13 +147,19 @@ export default async function RekapPage({
           </div>
           <div>
             <h2 className="text-lg font-bold text-slate-900 tracking-tight">Rekap & Laporan Penjualan</h2>
-            <p className="text-xs text-slate-500">Laporan periode: <strong className="text-slate-700">{period.label}</strong></p>
+            <p className="text-xs text-slate-500">
+              Laporan periode: <strong className="text-slate-700">{period.label}</strong>
+              {shift && <> · <strong className="text-blue-600">Shift {shift}</strong></>}
+            </p>
           </div>
         </div>
 
-        <div>
+        <div className="flex items-center gap-2">
           {isAdmin ? (
-            <PeriodFilter mode={period.mode} date={period.date} month={period.month} />
+            <>
+              <ShiftFilter shifts={shiftNames} current={shift} />
+              <PeriodFilter mode={period.mode} date={period.date} month={period.month} />
+            </>
           ) : (
             <span className="pill-blue text-xs">
               🔒 Hari Usaha Berjalan
@@ -209,8 +226,45 @@ export default async function RekapPage({
         )}
       </div>
 
-      {/* 3 Panels: Breakdown Per Kategori, Metode, Kasir */}
-      <div className="grid gap-4 md:grid-cols-3">
+      {/* 4 Panels: Per Shift, Kategori, Metode, Kasir */}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-500">Omzet per Shift</h3>
+          </div>
+          <div className="space-y-2 text-xs">
+            {shiftNames.map((s) => {
+              const v = perShift.get(s);
+              const pct = active.length ? Math.round(((v?.total || 0) / Math.max(1, omzet)) * 100) : 0;
+              return (
+                <div key={s} className={`p-2 rounded-lg border ${shift === s ? "bg-blue-50 border-blue-200" : "bg-slate-50 border-slate-100"}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-700">Shift {s}</span>
+                    <span className="font-mono font-bold text-slate-900">{rupiah(v?.total || 0)}</span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                    <div className="h-full rounded-full bg-blue-500" style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="mt-1 text-[10px] text-slate-400">
+                    {v?.qty || 0} transaksi · {pct}% dari omzet
+                  </div>
+                </div>
+              );
+            })}
+            {[...perShift.entries()]
+              .filter(([k]) => !shiftNames.includes(k))
+              .map(([k, v]) => (
+                <div key={k} className="p-2 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between">
+                  <span className="font-semibold text-slate-500">{k}</span>
+                  <span className="font-mono font-bold text-slate-600">{rupiah(v.total)}</span>
+                </div>
+              ))}
+            {active.length === 0 && (
+              <p className="text-center text-slate-400 py-3">Belum ada transaksi periode ini.</p>
+            )}
+          </div>
+        </div>
+
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
             <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-500">Penjualan per Kategori</h3>

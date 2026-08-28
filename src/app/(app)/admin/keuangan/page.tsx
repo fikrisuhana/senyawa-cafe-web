@@ -2,8 +2,10 @@ import { prisma } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { todayKey } from "@/lib/bizday";
 import { resolvePeriod } from "@/lib/period";
+import { shiftRanges } from "@/lib/shifts";
 import { rupiah, waktu } from "@/lib/format";
 import PeriodFilter from "@/components/PeriodFilter";
+import ShiftFilter from "@/components/ShiftFilter";
 import CashClient from "@/components/CashClient";
 import BelanjaClient from "@/components/BelanjaClient";
 import DeleteCash from "@/components/DeleteCash";
@@ -14,7 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function KeuanganPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mode?: string; date?: string; month?: string }>;
+  searchParams: Promise<{ mode?: string; date?: string; month?: string; shift?: string }>;
 }) {
   const settings = await getSettings();
   const sp = await searchParams;
@@ -22,9 +24,14 @@ export default async function KeuanganPage({
   const period = resolvePeriod(sp, settings.dayCutoffHour);
   const bdFilter = period.filter;
 
+  // Filter shift — scoped ke angka PENJUALAN POS (omzet & tunai);
+  // kas manual & biaya owner tetap level hari (gak punya shift).
+  const shiftNames = (await shiftRanges()).map((r) => r.name);
+  const shift = shiftNames.includes(sp.shift || "") ? sp.shift! : "";
+
   const [txs, entries, purchases, packs] = await Promise.all([
     prisma.transaction.findMany({
-      where: { businessDate: bdFilter, status: { not: "VOID" } },
+      where: { businessDate: bdFilter, status: { not: "VOID" }, ...(shift ? { shift } : {}) },
       select: { total: true, payment: true, businessDate: true },
     }),
     prisma.cashEntry.findMany({
@@ -68,10 +75,16 @@ export default async function KeuanganPage({
           </div>
           <div>
             <h2 className="text-lg font-bold text-slate-900 tracking-tight">Catatan Arus Keuangan &amp; Kas</h2>
-            <p className="text-xs text-slate-500">Laporan periode: <strong className="text-slate-700">{period.label}</strong></p>
+            <p className="text-xs text-slate-500">
+              Laporan periode: <strong className="text-slate-700">{period.label}</strong>
+              {shift && <> · <strong className="text-blue-600">Shift {shift}</strong> <span className="text-slate-400">(penjualan POS)</span></>}
+            </p>
           </div>
         </div>
-        <PeriodFilter mode={period.mode} date={period.date} month={period.month} />
+        <div className="flex items-center gap-2">
+          <ShiftFilter shifts={shiftNames} current={shift} />
+          <PeriodFilter mode={period.mode} date={period.date} month={period.month} />
+        </div>
       </div>
 
       {/* Primary KPI Row */}

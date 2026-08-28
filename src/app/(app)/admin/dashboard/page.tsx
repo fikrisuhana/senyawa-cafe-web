@@ -3,7 +3,9 @@ import { getSettings } from "@/lib/settings";
 import { todayKey, businessDateRange, labelHari } from "@/lib/bizday";
 import { rupiah } from "@/lib/format";
 import { labelBulan, resolvePeriod } from "@/lib/period";
+import { shiftRanges } from "@/lib/shifts";
 import PeriodDropdown from "@/components/PeriodDropdown";
+import ShiftFilter from "@/components/ShiftFilter";
 import Link from "next/link";
 import DashboardStats, { type StatData } from "@/components/DashboardStats";
 import {
@@ -27,7 +29,7 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mode?: string; preset?: string; date?: string; month?: string }>;
+  searchParams: Promise<{ mode?: string; preset?: string; date?: string; month?: string; shift?: string }>;
 }) {
   const settings = await getSettings();
   const sp = await searchParams;
@@ -41,20 +43,26 @@ export default async function DashboardPage({
   const pf = period.filter; // dipakai semua agregat periode
   const { start, end } = businessDateRange(today, settings.dayCutoffHour);
 
+  // Filter shift (Semua / Pagi / Malam) — scoped ke angka PENJUALAN;
+  // kas manual & biaya owner tetap level hari (gak punya shift).
+  const shiftNames = (await shiftRanges()).map((r) => r.name);
+  const shift = shiftNames.includes(sp.shift || "") ? sp.shift! : "";
+  const sf = shift ? { shift } : {};
+
   const [todayAgg, periodAgg, packs, periodItems, cashPeriod, purchPeriod] = await Promise.all([
     prisma.transaction.aggregate({
-      where: { createdAt: { gte: start, lt: end }, status: { not: "VOID" } },
+      where: { createdAt: { gte: start, lt: end }, status: { not: "VOID" }, ...sf },
       _sum: { total: true },
       _count: true,
     }),
     prisma.transaction.aggregate({
-      where: { businessDate: pf, status: { not: "VOID" } },
+      where: { businessDate: pf, status: { not: "VOID" }, ...sf },
       _sum: { total: true, costTotal: true },
       _count: true,
     }),
     prisma.packaging.findMany({ orderBy: { name: "asc" } }),
     prisma.transactionItem.findMany({
-      where: { transaction: { businessDate: pf, status: { not: "VOID" } } },
+      where: { transaction: { businessDate: pf, status: { not: "VOID" }, ...sf } },
       select: { name: true, qty: true, subtotal: true },
     }),
     prisma.cashEntry.findMany({ where: { businessDate: pf } }),
@@ -90,7 +98,7 @@ export default async function DashboardPage({
 
   // --- Data statistik untuk bulan terpilih ---
   const statTrx = await prisma.transaction.findMany({
-    where: { businessDate: pf, status: { not: "VOID" } },
+    where: { businessDate: pf, status: { not: "VOID" }, ...sf },
     include: { items: true },
   });
   const perHari = new Map<string, number>();
@@ -130,11 +138,13 @@ export default async function DashboardPage({
             <h2 className="text-lg font-bold text-slate-900 tracking-tight">Dashboard Ringkasan Operasional</h2>
             <p className="text-xs text-slate-500">
               Hari usaha {labelHari(today)} · Laporan aktif: <strong className="text-slate-700">{period.label}</strong>
+              {shift && <> · <strong className="text-blue-600">Shift {shift}</strong></>}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          <ShiftFilter shifts={shiftNames} current={shift} />
           <PeriodDropdown preset={period.preset} date={period.date} />
           <Link
             href="/kasir"

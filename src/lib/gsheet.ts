@@ -919,6 +919,7 @@ export async function syncCatalogToSheet(): Promise<void> {
         return hex(0xdeeaf6); // kategori lain → biru muda
       };
       // Baris data berurutan per kategori → gabung jadi band satu warna.
+      // (baris data pertama = index 5: 3 judul + 1 kosong + 1 header)
       const bands: { start: number; end: number; color: ReturnType<typeof bandColor> }[] = [];
       menus.forEach((m, i) => {
         const color = bandColor(m.category);
@@ -928,8 +929,8 @@ export async function syncCatalogToSheet(): Promise<void> {
           last.color.red === color.red &&
           last.color.green === color.green &&
           last.color.blue === color.blue;
-        if (same) last.end = 6 + i + 1;
-        else bands.push({ start: 6 + i, end: 6 + i + 1, color });
+        if (same) last.end = 5 + i + 1;
+        else bands.push({ start: 5 + i, end: 5 + i + 1, color });
       });
 
       const sid = await _sheetIdByTitle(sheetId, sheets, "Menu");

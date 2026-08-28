@@ -1,11 +1,12 @@
 "use client";
 
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { PERIOD_PRESETS } from "@/lib/period";
 
 /// Dropdown periode ala Dashboard Spreadsheet: preset (hari ini/kemarin/7/14/
 /// 30 hari/bulan lalu/60 hari) + pilih tanggal tertentu (input date).
+/// Param lain (mis. shift) dipertahankan saat ganti periode.
 export default function PeriodDropdown({
   preset,
   date,
@@ -15,23 +16,28 @@ export default function PeriodDropdown({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const sp = useSearchParams();
   const [d, setD] = useState(date);
 
   function apply(p: string, customDate = d) {
+    const q = new URLSearchParams(sp.toString());
+    q.set("mode", "rentang");
+    q.set("preset", p);
     if (p === "tanggal") {
-      router.push(`${pathname}?mode=rentang&preset=tanggal&date=${customDate}`);
+      q.set("date", customDate);
     } else {
-      router.push(`${pathname}?mode=rentang&preset=${p}`);
+      q.delete("date");
+      q.delete("page");
     }
+    router.push(`${pathname}?${q}`);
   }
+
+  const sel =
+    "h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 focus:outline-none focus:border-blue-500";
 
   return (
     <div className="flex items-center gap-2">
-      <select
-        className="input h-8 w-auto min-w-[9.5rem] text-xs"
-        value={preset || "hari_ini"}
-        onChange={(e) => apply(e.target.value)}
-      >
+      <select className={`${sel} min-w-[9.5rem]`} value={preset || "hari_ini"} onChange={(e) => apply(e.target.value)}>
         {PERIOD_PRESETS.map((p) => (
           <option key={p.id} value={p.id}>
             {p.label}
@@ -41,7 +47,7 @@ export default function PeriodDropdown({
       {preset === "tanggal" && (
         <input
           type="date"
-          className="input h-8 w-auto min-w-[9.5rem] text-xs"
+          className={`${sel} min-w-[9.5rem]`}
           value={d}
           onChange={(e) => {
             setD(e.target.value);

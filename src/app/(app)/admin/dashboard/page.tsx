@@ -151,7 +151,7 @@ export default async function DashboardPage({
             className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Buka Kasir</span>
+            <span>Buka Kasir</span>
           </Link>
         </div>
       </div>

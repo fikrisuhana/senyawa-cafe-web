@@ -80,10 +80,18 @@ export default async function RekapPage({
 
   const perKategori = new Map<string, { qty: number; total: number }>();
   const perMetode = new Map<string, number>();
+  const perMetodeShift = new Map<string, Map<string, { qty: number; total: number }>>();
   const perKasir = new Map<string, { qty: number; total: number }>();
   const perShift = new Map<string, { qty: number; total: number }>();
   for (const t of active) {
     perMetode.set(t.payment, (perMetode.get(t.payment) || 0) + t.total);
+    let ms = perMetodeShift.get(t.payment);
+    if (!ms) perMetodeShift.set(t.payment, (ms = new Map()));
+    const mKey = t.shift || "(tanpa shift)";
+    const mCur = ms.get(mKey) || { qty: 0, total: 0 };
+    mCur.qty += 1;
+    mCur.total += t.total;
+    ms.set(mKey, mCur);
     const sh = perShift.get(t.shift || "(tanpa shift)") || { qty: 0, total: 0 };
     sh.qty += 1;
     sh.total += t.total;
@@ -306,14 +314,38 @@ export default async function RekapPage({
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
             <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-500">Metode Pembayaran</h3>
+            <span className="text-[11px] text-slate-400">Klik rincian shift</span>
           </div>
-          <div className="space-y-2 text-xs">
-            {[...perMetode.entries()].map(([k, v]) => (
-              <div key={k} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
-                <span className="font-semibold text-slate-700">{k}</span>
-                <span className="font-mono font-bold text-slate-900">{rupiah(v)}</span>
-              </div>
-            ))}
+          <div className="space-y-1.5 text-xs">
+            {[...perMetode.entries()].map(([k, v]) => {
+              const perSh = [...(perMetodeShift.get(k) || new Map()).entries()].sort((a, b) => {
+                const ia = shiftNames.indexOf(a[0]);
+                const ib = shiftNames.indexOf(b[0]);
+                return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+              });
+              return (
+                <details key={k} className="group border-b border-slate-100 last:border-0 pb-1">
+                  <summary className="flex cursor-pointer list-none items-center justify-between py-1 text-xs hover:bg-slate-50 rounded px-1 transition [&::-webkit-details-marker]:hidden">
+                    <span className="font-semibold text-slate-800 flex items-center gap-1.5">
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-400 transition group-open:rotate-90" />
+                      <span>{k}</span>
+                      <span className="pill-slate text-[10px]">{perSh.reduce((s, [, d]) => s + d.qty, 0)} trx</span>
+                    </span>
+                    <span className="font-mono font-bold text-slate-900">{rupiah(v)}</span>
+                  </summary>
+                  <div className="mt-1 space-y-1 border-l-2 border-blue-400 pl-3 py-1 bg-slate-50/50 rounded-r">
+                    {perSh.map(([s, d]) => (
+                      <div key={s} className="flex items-center justify-between text-[11px] py-0.5">
+                        <span className="text-slate-600">{shiftNames.includes(s) ? `Shift ${s}` : s}</span>
+                        <span className="font-mono text-slate-700">
+                          <span className="font-semibold text-blue-600">{d.qty}×</span> · {rupiah(d.total)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              );
+            })}
           </div>
         </div>
 

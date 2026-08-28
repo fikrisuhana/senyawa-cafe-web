@@ -936,7 +936,7 @@ export async function syncCatalogToSheet(): Promise<void> {
       const THIN = { style: "SOLID", width: 1, color: { red: 0.73, green: 0.73, blue: 0.73 } };
       const grid = (r0: number, r1: number, c0 = 0, c1 = COLS) => ({ sheetId: sid, startRowIndex: r0, endRowIndex: r1, startColumnIndex: c0, endColumnIndex: c1 });
       const requests: any[] = [
-        { unmergeRanges: { ranges: [{ sheetId: sid }] } }, // layout bisa berubah antar versi
+        // (merge ulang range sama = idempotent, aman tiap rebuild)
         // Reset format lama dulu (biar gak ada sisa warna/merge versi sebelumnya).
         { repeatCell: { range: grid(0, menuRows.length + 55), cell: { userEnteredFormat: {} }, fields: "userEnteredFormat" } },
         { mergeCells: { range: grid(0, 1), mergeType: "MERGE_ROWS" } },

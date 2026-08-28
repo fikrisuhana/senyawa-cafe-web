@@ -288,9 +288,10 @@ export default function PengaturanClient({ settings }: { settings: Settings }) {
         </button>
       </form>
 
-      {/* Preview struk + kelola Google Sheet */}
+      {/* Preview struk + kelola Google Sheet + Drive nota */}
       <div className="lg:sticky lg:top-20 h-fit space-y-4">
         <SheetManager />
+        <DriveConnect />
 
         <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -338,16 +339,10 @@ export default function PengaturanClient({ settings }: { settings: Settings }) {
   );
 }
 
-/// Kartu kelola Google Sheet: status koneksi, ganti spreadsheet, folder nota Drive, sinkron ulang.
+/// Kartu kelola Google Sheet: status koneksi, ganti spreadsheet, sinkron ulang.
 function SheetManager() {
-  const [state, setState] = useState<{
-    enabled: boolean;
-    url?: string | null;
-    serviceAccountEmail?: string;
-    driveFolderUrl?: string | null;
-  } | null>(null);
+  const [state, setState] = useState<{ enabled: boolean; url?: string | null; serviceAccountEmail?: string } | null>(null);
   const [url, setUrl] = useState("");
-  const [folder, setFolder] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -376,26 +371,6 @@ function SheetManager() {
     setUrl("");
     setMsg("✅ Spreadsheet diganti — klik Sinkronkan ulang");
     setState((s) => (s ? { ...s, url: body.url } : s));
-  }
-
-  async function saveFolder(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setMsg("");
-    const res = await fetch("/api/admin/sheet", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ driveFolder: folder }),
-    });
-    const body = await res.json();
-    setBusy(false);
-    if (!res.ok) {
-      setMsg(`❌ ${body.error || "Gagal"}`);
-      return;
-    }
-    setFolder("");
-    setMsg(`✅ Folder nota tersimpan: ${body.driveFolder?.name || "folder"}`);
-    setState((s) => (s ? { ...s, driveFolderUrl: body.driveFolderUrl } : s));
   }
 
   async function rebuild() {
@@ -462,50 +437,6 @@ function SheetManager() {
             </button>
           </form>
 
-          {/* Folder nota belanja (Google Drive) */}
-          <div className="border-t border-slate-100 pt-2.5 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-700 flex items-center gap-1.5">
-                <Receipt className="w-3.5 h-3.5 text-slate-500" />
-                Folder Nota Belanja (Drive)
-              </span>
-              <span className={state.driveFolderUrl ? "pill-green text-[10px]" : "pill-amber text-[10px]"}>
-                {state.driveFolderUrl ? "Terhubung" : "Belum diset"}
-              </span>
-            </div>
-            {state.driveFolderUrl ? (
-              <a
-                href={state.driveFolderUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] font-semibold text-blue-600 hover:underline flex items-center gap-1"
-              >
-                <span>Buka folder nota</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            ) : (
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Nota belanja disimpan sebagai foto di Google Drive (bukan di server). Buat folder di Drive kamu
-                (mis. <b>Nota POS</b>), share <b>Editor</b> ke email SA di atas, lalu tempel URL foldernya di sini.
-              </p>
-            )}
-            <form onSubmit={saveFolder} className="flex gap-1.5">
-              <input
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none focus:border-blue-500"
-                placeholder="https://drive.google.com/drive/folders/..."
-                value={folder}
-                onChange={(e) => setFolder(e.target.value)}
-              />
-              <button
-                type="submit"
-                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-xs transition disabled:opacity-50"
-                disabled={busy || !folder.trim()}
-              >
-                Simpan
-              </button>
-            </form>
-          </div>
-
           <button
             type="button"
             className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg font-semibold text-xs transition flex items-center justify-center gap-1.5 disabled:opacity-50"
@@ -519,6 +450,213 @@ function SheetManager() {
           {msg && <p className="text-[11px] text-slate-600 font-medium">{msg}</p>}
         </div>
       )}
+    </div>
+  );
+}
+
+/// Kartu koneksi akun Google Drive buat upload NOTA belanja.
+/// Google melarang service account menyimpan file di Drive Gmail biasa, jadi
+/// nota diupload sebagai akun owner lewat OAuth (sekali hubungkan di sini).
+function DriveConnect() {
+  const [st, setSt] = useState<{
+    connected?: boolean;
+    email?: string | null;
+    clientIdSet?: boolean;
+    folderUrl?: string | null;
+  } | null>(null);
+  const [cid, setCid] = useState("");
+  const [csec, setCsec] = useState("");
+  const [folder, setFolder] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = () =>
+    fetch("/api/admin/drive")
+      .then((r) => r.json())
+      .then(setSt)
+      .catch(() => setSt({}));
+
+  useEffect(() => {
+    load();
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("drive") === "ok") {
+      setMsg(`✅ Google Drive terhubung${q.get("email") ? ` (${q.get("email")})` : ""} — upload nota siap`);
+      window.history.replaceState({}, "", "/admin/pengaturan");
+    } else if (q.get("drive") === "err") {
+      setMsg(`❌ Gagal menghubungkan: ${q.get("msg") || "coba lagi"}`);
+      window.history.replaceState({}, "", "/admin/pengaturan");
+    }
+  }, []);
+
+  async function saveCreds(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg("");
+    const res = await fetch("/api/admin/drive", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientId: cid, clientSecret: csec }),
+    });
+    const body = await res.json();
+    setBusy(false);
+    setMsg(res.ok ? "✅ Kredensial tersimpan — lanjut Hubungkan Google Drive" : `❌ ${body.error || "Gagal"}`);
+    if (res.ok) {
+      setCsec("");
+      load();
+    }
+  }
+
+  async function connect() {
+    setBusy(true);
+    setMsg("");
+    const res = await fetch("/api/admin/drive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "start" }),
+    });
+    const body = await res.json();
+    setBusy(false);
+    if (!res.ok) {
+      setMsg(`❌ ${body.error || "Gagal"}`);
+      return;
+    }
+    window.location.href = body.url;
+  }
+
+  async function disconnect() {
+    setBusy(true);
+    await fetch("/api/admin/drive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "disconnect" }),
+    });
+    setBusy(false);
+    setMsg("ℹ️ Akun Google diputuskan — upload nota nonaktif");
+    load();
+  }
+
+  async function saveFolder(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg("");
+    const res = await fetch("/api/admin/sheet", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ driveFolder: folder }),
+    });
+    const body = await res.json();
+    setBusy(false);
+    if (!res.ok) {
+      setMsg(`❌ ${body.error || "Gagal"}`);
+      return;
+    }
+    setFolder("");
+    setMsg(`✅ Folder nota: ${body.driveFolder?.name || "tersimpan"}`);
+    load();
+  }
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3 text-xs">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+        <h4 className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+          <Receipt className="w-3.5 h-3.5 text-blue-600" />
+          <span>Nota Belanja → Google Drive</span>
+        </h4>
+        <span className={st?.connected ? "pill-green text-[10px]" : "pill-amber text-[10px]"}>
+          {st === null ? "…" : st.connected ? `Aktif${st.email ? "" : ""}` : "Belum aktif"}
+        </span>
+      </div>
+
+      {st?.connected ? (
+        <div className="space-y-2.5">
+          <p className="text-[11px] text-slate-600">
+            Upload nota jalan sebagai akun <b className="break-all">{st.email || "Google kamu"}</b>. Foto nota
+            masuk ke folder di bawah, link-nya nongol di tab Belanja Sheet &amp; halaman Keuangan.
+          </p>
+          {st.folderUrl ? (
+            <a
+              href={st.folderUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[11px] font-semibold text-blue-600 hover:underline flex items-center gap-1"
+            >
+              <span>Buka folder nota</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          ) : (
+            <p className="text-[11px] text-amber-600 font-medium">
+              Belum pilih folder tujuan — tempel URL folder di bawah.
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={disconnect}
+            disabled={busy}
+            className="text-[11px] text-rose-600 font-semibold hover:underline disabled:opacity-50"
+          >
+            Putuskan akun Google
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            Foto nota disimpan ke Google Drive <b>akunmu sendiri</b> (bukan di server). Perlu <b>OAuth Client ID</b>{" "}
+            dari Google Cloud Console (project yang sama) — redirect URI:{" "}
+            <code className="font-mono text-[10px] bg-slate-50 border border-slate-200 rounded px-1 py-0.5 break-all">
+              https://ruangsenyawa.iprime.web.id/api/admin/drive/callback
+            </code>
+          </p>
+          <form onSubmit={saveCreds} className="space-y-1.5">
+            <input
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none focus:border-blue-500 font-mono"
+              placeholder={st?.clientIdSet ? "Client ID tersimpan ✓ (isi lagi untuk ganti)" : "OAuth Client ID"}
+              value={cid}
+              onChange={(e) => setCid(e.target.value)}
+            />
+            <input
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none focus:border-blue-500 font-mono"
+              type="password"
+              placeholder="Client Secret"
+              value={csec}
+              onChange={(e) => setCsec(e.target.value)}
+            />
+            <button
+              type="submit"
+              className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-xs transition disabled:opacity-50"
+              disabled={busy || !cid.trim() || !csec.trim()}
+            >
+              Simpan Kredensial
+            </button>
+          </form>
+          <button
+            type="button"
+            onClick={connect}
+            disabled={busy || !st?.clientIdSet}
+            className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-xs shadow-sm transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span>Hubungkan Google Drive</span>
+          </button>
+        </div>
+      )}
+
+      <form onSubmit={saveFolder} className="flex gap-1.5 border-t border-slate-100 pt-2.5">
+        <input
+          className="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none focus:border-blue-500"
+          placeholder="URL folder tujuan (drive.google.com/drive/folders/…)"
+          value={folder}
+          onChange={(e) => setFolder(e.target.value)}
+        />
+        <button
+          type="submit"
+          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-xs transition disabled:opacity-50"
+          disabled={busy || !folder.trim()}
+        >
+          Simpan
+        </button>
+      </form>
+
+      {msg && <p className="text-[11px] text-slate-600 font-medium">{msg}</p>}
     </div>
   );
 }

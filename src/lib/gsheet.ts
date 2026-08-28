@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import { Readable } from "stream";
+import { randomBytes } from "crypto";
 import { prisma } from "./db";
 
 /**
@@ -67,33 +68,43 @@ async function _sheetIdByTitle(id: string, sheets: any, title: string): Promise<
 }
 
 /**
- * Upload foto NOTA belanja ke Google Drive pakai service account — file TIDAK
- * disimpan di server. Syarat (set dari web): owner bikin folder di Drive-nya
- * (mis. "Nota POS"), share ke email SA sebagai Editor, lalu tempel URL foldernya
- * di Admin → Pengaturan (disimpan di Setting 'drive_folder_id').
- * File masuk folder owner (quota owner) → otomatis kelihatan di Drive owner;
- * webViewLink-nya dipakai di kolom "nota" tab Belanja Sheet.
+ * Upload foto NOTA belanja ke Google Drive — file TIDAK disimpan di server.
+ * Prioritas: (1) akun OWNER via OAuth (satu-satunya jalan utk Gmail konsumer —
+ * Google melarang SA menyimpan file); (2) service account (hanya Workspace /
+ * shared drive). Target folder = Setting 'drive_folder_id' (atur dari web).
  */
 export async function uploadNotaToDrive(
   fileName: string,
   mimeType: string,
   buf: Buffer,
 ): Promise<{ url: string; name: string }> {
-  const auth = jwt();
-  if (!auth) throw new Error("Service account Google belum dikonfigurasi");
-  // SA TIDAK punya storage quota di My Drive-nya sendiri — file HARUS masuk folder
-  // milik akun asli (owner) yang di-share ke SA sebagai Editor. Tanpa itu Google
-  // menolak: "Service Accounts do not have storage quota".
+  const name = `nota-${Date.now()}-${fileName}`.slice(0, 150);
+  const media = { mimeType, body: Readable.from(buf) };
   const folderId = await currentDriveFolderId();
+
+  const oauth = await driveOAuthClient();
+  if (oauth) {
+    const drive = google.drive({ version: "v3", auth: oauth });
+    const f = await drive.files.create({
+      requestBody: { name, ...(folderId ? { parents: [folderId] } : {}) },
+      media,
+      fields: "id,name,webViewLink",
+    });
+    if (!f.data.webViewLink) throw new Error("Upload Drive gagal");
+    return { url: f.data.webViewLink, name: f.data.name || fileName };
+  }
+
+  const auth = jwt();
+  if (!auth) throw new Error("Google belum dikonfigurasi di server");
   if (!folderId) {
     throw new Error(
-      `Folder nota belum diset — Admin → Pengaturan → tempel URL folder Drive yang di-share (Editor) ke ${auth.email}`,
+      "Upload nota belum siap — hubungkan akun Google Drive & set folder nota di Admin → Pengaturan",
     );
   }
   const drive = google.drive({ version: "v3", auth });
   const f = await drive.files.create({
-    requestBody: { name: `nota-${Date.now()}-${fileName}`.slice(0, 150), parents: [folderId] },
-    media: { mimeType, body: Readable.from(buf) },
+    requestBody: { name, parents: [folderId] },
+    media,
     fields: "id,name,webViewLink",
   });
   if (!f.data.id || !f.data.webViewLink) throw new Error("Upload Drive gagal");
@@ -144,6 +155,98 @@ export function extractDriveFolderId(input: string): string {
 /** ID folder nota aktif: Setting DB (atur dari web) → fallback env DRIVE_FOLDER_ID. */
 export async function currentDriveFolderId(): Promise<string> {
   return (((await getSetting("drive_folder_id")) || process.env.DRIVE_FOLDER_ID || "").trim());
+}
+
+// ============ AKUN GOOGLE OWNER (OAuth) untuk upload nota ============
+// Google MELARANG service account menyimpan file di Drive konsumer (@gmail.com):
+// "Service Accounts do not have storage quota" — share folder pun tetap ditolak.
+// Jadi nota diupload SEBAGAI AKUN OWNER via OAuth (sekali "Hubungkan Google Drive"
+// di Pengaturan; refresh token disimpan di Setting).
+
+function driveRedirectUri(): string {
+  return `${(process.env.APP_BASE_URL || "https://ruangsenyawa.iprime.web.id").replace(/\/$/, "")}/api/admin/drive/callback`;
+}
+
+function driveOAuth2(clientId: string, clientSecret: string) {
+  return new google.auth.OAuth2(clientId, clientSecret, driveRedirectUri());
+}
+
+/** Status koneksi Drive buat UI admin. */
+export async function driveStatus() {
+  const [refresh, email, clientId, folderId] = await Promise.all([
+    getSetting("drive_refresh_token"),
+    getSetting("drive_email"),
+    getSetting("drive_client_id"),
+    currentDriveFolderId(),
+  ]);
+  return {
+    enabled: sheetEnabled(),
+    connected: !!refresh,
+    email: email || null,
+    clientIdSet: !!clientId,
+    folderId: folderId || null,
+    folderUrl: folderId ? `https://drive.google.com/drive/folders/${folderId}` : null,
+  };
+}
+
+/** Simpan kredensial OAuth (Client ID & Secret dari Google Console) via web. */
+export async function saveDriveCreds(clientId: string, clientSecret: string) {
+  await setSetting("drive_client_id", clientId.trim());
+  await setSetting("drive_client_secret", clientSecret.trim());
+}
+
+/** URL consent Google ("Hubungkan Google Drive"). State sekali-pakai disimpan DB. */
+export async function driveAuthUrl(): Promise<string> {
+  const clientId = await getSetting("drive_client_id");
+  const clientSecret = await getSetting("drive_client_secret");
+  if (!clientId || !clientSecret) throw new Error("Isi Client ID & Secret dulu");
+  const state = randomBytes(16).toString("hex");
+  await setSetting("drive_oauth_state", state);
+  return driveOAuth2(clientId, clientSecret).generateAuthUrl({
+    access_type: "offline",
+    prompt: "consent",
+    scope: ["https://www.googleapis.com/auth/drive"],
+    state,
+  });
+}
+
+/** Tukar code OAuth → refresh token (dipanggil route callback). */
+export async function exchangeDriveCode(code: string, state: string): Promise<string> {
+  const clientId = await getSetting("drive_client_id");
+  const clientSecret = await getSetting("drive_client_secret");
+  const savedState = await getSetting("drive_oauth_state");
+  if (!clientId || !clientSecret) throw new Error("Client ID/Secret belum diset");
+  if (!state || state !== savedState) throw new Error("State OAuth tidak cocok — ulangi hubungkan");
+  await setSetting("drive_oauth_state", "");
+  const res = await driveOAuth2(clientId, clientSecret).getToken(code);
+  const refresh = res.tokens.refresh_token;
+  if (!refresh) throw new Error("Google tidak mengembalikan refresh token — ulangi hubungkan");
+  await setSetting("drive_refresh_token", refresh);
+  let email = "";
+  try {
+    const p = JSON.parse(Buffer.from(String(res.tokens.id_token || "").split(".")[1] || "", "base64").toString("utf8"));
+    email = p.email || "";
+  } catch { /* id_token opsional */ }
+  if (email) await setSetting("drive_email", email);
+  return email;
+}
+
+/** Putuskan akun Google (hapus refresh token). */
+export async function disconnectDrive() {
+  await setSetting("drive_refresh_token", "");
+  await setSetting("drive_email", "");
+}
+
+async function driveOAuthClient() {
+  const [clientId, clientSecret, refresh] = await Promise.all([
+    getSetting("drive_client_id"),
+    getSetting("drive_client_secret"),
+    getSetting("drive_refresh_token"),
+  ]);
+  if (!clientId || !clientSecret || !refresh) return null;
+  const o = driveOAuth2(clientId, clientSecret);
+  o.setCredentials({ refresh_token: refresh });
+  return o;
 }
 
 /** ID sheet aktif: dari Setting DB (bisa diubah web) → fallback env GSHEET_ID. */

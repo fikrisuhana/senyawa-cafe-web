@@ -255,6 +255,18 @@ export async function currentSheetId(): Promise<string> {
   return ((await getSetting("gsheet_id")) || process.env.GSHEET_ID || "").trim();
 }
 
+export async function currentSheetMenuId(): Promise<string> {
+  return ((await getSetting("gsheet_menu_id")) || "1ssiOBICS8NnpFhlduePPteq9rrBShvOHNwuinrFFCC0").trim();
+}
+
+export async function currentSheetRekapId(): Promise<string> {
+  return ((await getSetting("gsheet_rekap_id")) || "1szyOAcURWTPnSv7yxZOGO6Cj77ey706ao4hFX3m-Xg").trim();
+}
+
+export async function currentSheetBhpId(): Promise<string> {
+  return ((await getSetting("gsheet_bhp_id")) || (await currentSheetId())).trim();
+}
+
 /** Simpan/ganti sheet dari URL atau ID (dipanggil dari admin web). */
 export async function setSheetIdFrom(input: string): Promise<string> {
   const id = extractSheetId(input);
@@ -1074,4 +1086,186 @@ export async function syncCatalogToSheet(): Promise<void> {
   } catch (e) {
     console.error("syncCatalogToSheet gagal:", (e as Error).message);
   }
+}
+
+/**
+ * Import master menu dari Google Sheet "Menu & Harga | Ruang Senyawa" (Screenshot #2).
+ * Membaca sheet "Sheet1" baris 6 ke bawah.
+ */
+export async function syncMenuFromSheet(customSheetId?: string) {
+  const auth = jwt();
+  if (!auth) throw new Error("Service account belum dikonfigurasi");
+  const id = customSheetId || (await currentSheetMenuId());
+  if (!id) throw new Error("ID Spreadsheet Menu & Harga belum di-set");
+
+  const sheets = google.sheets({ version: "v4", auth });
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: id,
+    range: "'Sheet1'!A6:K100",
+  });
+
+  const rows = res.data.values || [];
+  let updatedCount = 0;
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.length < 2) continue;
+    const name = String(row[1] || "").trim();
+    if (!name || name.toLowerCase() === "nama menu") continue;
+    const category = String(row[2] || "").trim() || "UMUM";
+
+    // Parsing harga: Ice Normal di col H (idx 7), Hot di col G (idx 6)
+    const priceStr = String(row[7] || row[6] || row[9] || "0").replace(/\D/g, "");
+    const price = parseInt(priceStr, 10) || 0;
+
+    // Parsing HPP/Modal: Ice di col E (idx 4), Hot di col D (idx 3)
+    const hppStr = String(row[4] || row[3] || row[5] || "0").replace(/\D/g, "");
+    const cost = parseInt(hppStr, 10) || 0;
+
+    if (price <= 0) continue;
+
+    await prisma.menuItem.upsert({
+      where: { name },
+      update: { category, price, cost, active: true },
+      create: { name, category, price, cost, active: true, sortOrder: i + 1 },
+    });
+    updatedCount++;
+  }
+
+  return updatedCount;
+}
+
+/**
+ * Push rekap harian porsi per item ke Spreadsheet "(4) Rekap Harian - Ruang Senyawa" (Screenshot #1).
+ * Mengisi tab bulan aktif (misal "September 2026") sesuai tanggal transaksi.
+ */
+export async function exportRekapHarianToCustomSheet(businessDateStr: string, customSheetId?: string) {
+  const auth = jwt();
+  if (!auth) return;
+  const id = customSheetId || (await currentSheetRekapId());
+  if (!id) return;
+
+  const sheets = google.sheets({ version: "v4", auth });
+  const dt = new Date(businessDateStr);
+  const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  const tabName = `${monthNames[dt.getMonth()]} ${dt.getFullYear()}`;
+
+  // Check if active month sheet tab exists
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: id });
+  const titles = (meta.data.sheets || []).map((s) => s.properties?.title || "");
+  if (!titles.includes(tabName)) return;
+
+  // Group item sales for businessDateStr
+  const trxs = await prisma.transaction.findMany({
+    where: { businessDate: businessDateStr, status: "ACTIVE" },
+    include: { items: true },
+  });
+
+  const itemQtyMap: Record<string, number> = {};
+  for (const t of trxs) {
+    for (const item of t.items) {
+      itemQtyMap[item.name] = (itemQtyMap[item.name] || 0) + item.qty;
+    }
+  }
+
+  // Get header row (row 5) from the sheet to match menu column positions
+  const headerRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: id,
+    range: `'${tabName}'!A5:AZ5`,
+  });
+
+  const headers = (headerRes.data.values?.[0] || []).map((h: string) => String(h).trim());
+  if (headers.length < 3) return;
+
+  // Get dates from Column B (row 7 to 37)
+  const datesRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: id,
+    range: `'${tabName}'!B7:B37`,
+  });
+
+  const dateRows = datesRes.data.values || [];
+  let targetRowIdx = -1;
+  const dayStr = String(dt.getDate()).padStart(2, "0");
+
+  for (let r = 0; r < dateRows.length; r++) {
+    const val = String(dateRows[r]?.[0] || "");
+    if (val.startsWith(dayStr)) {
+      targetRowIdx = 7 + r;
+      break;
+    }
+  }
+
+  if (targetRowIdx === -1) return;
+
+  // Build row update values matching header columns
+  const updateValues: (number | string)[] = new Array(headers.length).fill("");
+  for (let col = 2; col < headers.length; col++) {
+    const headerName = headers[col];
+    if (!headerName) continue;
+    for (const [itemName, qty] of Object.entries(itemQtyMap)) {
+      if (headerName.toLowerCase().includes(itemName.toLowerCase()) || itemName.toLowerCase().includes(headerName.toLowerCase())) {
+        updateValues[col] = qty;
+        break;
+      }
+    }
+  }
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: id,
+    range: `'${tabName}'!C${targetRowIdx}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [updateValues.slice(2)] },
+  });
+}
+
+/**
+ * Catat pembelian BHP / Bahan ke Spreadsheet "(3) BHP, Bahan Makmin - Ruang Senyawa" (Screenshots #3 & #4).
+ * Termasuk kolom `Link Nota` (URL Google Drive dari uploadNotaToDrive).
+ */
+export async function appendBhpPurchaseToSheet(params: {
+  isIngredient: boolean;
+  name: string;
+  qty: number;
+  unitPrice: number;
+  dateStr: string;
+  note?: string;
+  notaUrl?: string;
+  customSheetId?: string;
+}) {
+  const auth = jwt();
+  if (!auth) return;
+  const id = params.customSheetId || (await currentSheetBhpId());
+  if (!id) return;
+
+  const sheets = google.sheets({ version: "v4", auth });
+  const total = params.qty * params.unitPrice;
+
+  // Check target sheet tab name
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: id });
+  const titles = (meta.data.sheets || []).map((s) => s.properties?.title || "");
+  const targetSheet = titles.find((t) => t.toLowerCase().includes(params.isIngredient ? "bahan" : "aset")) || titles[0];
+
+  if (!targetSheet) return;
+
+  // Append new purchase row with Link Nota in column J
+  const rowValues = [
+    "", // No.
+    params.name,
+    params.qty,
+    params.unitPrice,
+    total,
+    params.dateStr,
+    params.note || "",
+    "",
+    "",
+    params.notaUrl || "", // Column J (Link Nota)
+  ];
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: id,
+    range: `'${targetSheet}'!A5`,
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values: [rowValues] },
+  });
 }

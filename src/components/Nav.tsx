@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { SessionUser } from "@/lib/auth";
@@ -67,6 +68,7 @@ export default function Nav({
   const router = useRouter();
   const isAdmin = user.role === "ADMIN";
   const main = isAdmin ? adminMain : kasirLinks;
+  const [syncingSheet, setSyncingSheet] = useState(false);
 
   const active = (href: string) => pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
 
@@ -76,6 +78,24 @@ export default function Nav({
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
+  }
+
+  async function handleManualSheetSync() {
+    setSyncingSheet(true);
+    try {
+      const res = await fetch("/api/admin/sheet", { method: "POST" });
+      if (res.ok) {
+        alert("✓ Sinkronisasi ulang Google Sheet berhasil!");
+        router.refresh();
+      } else {
+        const b = await res.json().catch(() => ({}));
+        alert(`❌ Sync Sheet gagal: ${b.error || "Coba lagi"}`);
+      }
+    } catch (e) {
+      alert("❌ Sync Sheet error: " + (e as Error).message);
+    } finally {
+      setSyncingSheet(false);
+    }
   }
 
   const Brand = (
@@ -246,6 +266,18 @@ export default function Nav({
               <span>·</span>
               <span className="text-slate-400 capitalize">{user.role.toLowerCase()}</span>
             </span>
+
+            {isAdmin && (
+              <button
+                onClick={handleManualSheetSync}
+                disabled={syncingSheet}
+                title="Sinkronkan Ulang Google Sheet"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold transition disabled:opacity-50"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${syncingSheet ? "animate-spin" : ""}`} />
+                <span>{syncingSheet ? "Syncing..." : "Sync Sheet"}</span>
+              </button>
+            )}
 
             <button
               onClick={() => router.refresh()}

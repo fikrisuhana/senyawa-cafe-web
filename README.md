@@ -1,50 +1,63 @@
-# POS Cafe ☕
+# POS Cafe & Management System ☕
 
-Aplikasi kasir & keuangan cafe sederhana. Next.js (App Router) + PostgreSQL + Prisma + Docker.
+Aplikasi Kasir (POS), Manajemen Operasional, & Integrasi Google Sheets / Drive untuk **Ruang Senyawa**.
 
-> Template awal — dibuat untuk disesuaikan bareng tim. Lihat [`docs/SPEC.md`](docs/SPEC.md)
-> untuk cakupan & arah pengembangan.
+Built with **Next.js (App Router) + PostgreSQL + Prisma + TailwindCSS**.
 
-## Fitur
-- **2 peran**: `ADMIN` (pemilik) & `KASIR`.
-- **Kasir**: layar POS (pilih menu → keranjang → bayar → struk), lihat penjualan hari ini, absensi shift.
-- **Rekap penjualan**: per **hari usaha** (tutup lewat tengah malam ditangani), bisa pilih rentang tanggal. Untung kotor hanya tampil untuk admin.
-- **Admin – Menu**: CRUD menu (kopi/makanan/dll) + atur harga & modal, aktif/nonaktif, kaitkan kemasan.
-- **Admin – Stok kemasan**: hanya bahan yang dihitung (cup, wadah makan, dll). Setiap penjualan otomatis memotong stok kemasan. Update stok manual: **unduh template Excel → edit di Excel → unggah lagi**.
-- **Admin – Absensi**: rekap jam kerja kasir.
-- **Admin – User** & **Pengaturan** (nama cafe, jam buka/tutup, jam pemisah hari usaha, footer struk).
+---
 
-## Jalankan dengan Docker (paling gampang)
+## 🌟 Fitur Utama
+
+- **2 Peran Akses**: `ADMIN` (pemilik/manajer) & `KASIR`.
+- **Kasir (POS)**: Layar POS cepat (menu -> varian -> keranjang -> bayar -> struk thermal), rekap penjualan harian, absensi per shift.
+- **Rekap Penjualan per Shift & Hari Usaha**: 
+  - Penanganan tutup lewat tengah malam (contoh: `dayCutoffHour` jam 6 pagi).
+  - **Dukungan Shift Terisolasi (Shift Pagi / Shift Malam)**: Omzet, transaksi, kas masuk/keluar, saldo laci, & item terjual terpisah bersih per shift.
+- **Tema Visual**: **Dark Sage Green (`#356A58`)** untuk tampilan yang elegan & konsisten.
+- **Manajemen Katalog & Stok**: CRUD Menu & HPP, stok bahan/kemasan, varian menu, dan voucher promo.
+
+---
+
+## 📊 Integrasi Multi-Spreadsheet Google Sheets & Drive (Server-Side)
+
+Server Web mengelola integrasi otomatis dengan **3 File Spreadsheet Custom Pemilik Kafe**:
+
+1. **`Menu & Harga | Ruang Senyawa` (Master Data)**
+   - Mengimpor otomatis daftar menu, HPP (Hot/Ice/Kapsul 250ml), & Harga Jual.
+2. **`(4) Rekap Harian - Ruang Senyawa` (Matriks Penjualan Harian)**
+   - Mengisi otomatis porsi menu terjual per hari pada tab bulan aktif (`Agustus 2026`, `September 2026`...).
+3. **`(3) BHP, Bahan Makmin - Ruang Senyawa` (Aset & Bahan Makmin)**
+   - Meng-append setiap transaksi pembelian barang/bahan beserta **`Link Nota`**.
+
+### 📸 Auto Upload Foto Nota ke Google Drive
+- Saat menginput pengeluaran/restok di Web Admin, **foto nota diunggah langsung ke Google Drive pemilik** (via Google Drive OAuth 2.0).
+- URL tampilan nota (`Link Nota`) otomatis tersisip di kolom J Spreadsheet tanpa membebani penyimpanan server!
+
+### 🔄 Tombol Instant Sync Sheet di Web Admin
+- Tombol **`[🔄 Sync Sheet]`** tersedia di **header atas Web Admin Dashboard** untuk melakukan sinkronisasi ulang kapan saja dengan sekali klik.
+
+---
+
+## 🚀 Panduan Jalankan Aplikasi
+
+### Jalankan dengan Docker (Rekomendasi)
 ```bash
 docker compose up -d --build
 ```
-Buka `http://<host>:3080`. Login default:
-- Admin: `admin` / `admin123`
-- Kasir: `kasir` / `kasir123`
+Akses di `http://localhost:3080`. Credential default:
+- **Admin**: `admin` / `admin123`
+- **Kasir**: `kasir` / `kasir123`
 
-> Ganti `JWT_SECRET` di `docker-compose.yml` sebelum dipakai serius, dan ganti password default.
-
-## Jalankan lokal (tanpa Docker)
-Butuh PostgreSQL jalan. Salin `.env.example` → `.env`, sesuaikan `DATABASE_URL`, lalu:
+### Jalankan Lokal (Dev Mode)
 ```bash
 npm install
 npm run db:push
-npm run db:seed
 npm run dev
 ```
 
-## Konsep "hari usaha"
-Cafe buka 9 pagi–1 pagi, jadi 1 hari kerja melewati tengah malam. Setelan **`dayCutoffHour`**
-(default `6`) memisahkan hari: transaksi sebelum jam 6 pagi dihitung sebagai hari kemarin.
-Bisa diubah di menu **Pengaturan**. Server diset `TZ=Asia/Jakarta`.
+---
 
-## Impor stok dari Excel
-Kolom yang dibaca (huruf besar/kecil bebas): `nama`, `satuan`, `stok`, `stok_min`.
-Stok akan **di-set** sesuai isi file (bukan ditambah), dan tercatat di riwayat pergerakan stok.
-
-## Deploy singkat (server dev `172.16.1.5`)
-Lihat bagian akhir `docs/SPEC.md`. Ringkas:
-```bash
-rsync -az --exclude node_modules --exclude .next ./ mint@172.16.1.5:~/pos-cafe/
-ssh mint@172.16.1.5 'cd ~/pos-cafe && docker compose up -d --build'
-```
+## ⏱️ Konsep "Hari Usaha" & Timezone
+- **Zona Waktu**: Server berjalan pada `TZ=Asia/Jakarta` (WIB GMT+7).
+- **Day Cutoff**: Transaksi sebelum jam `dayCutoffHour` (default 6 pagi) dihitung masuk ke hari usaha sebelumnya.
+- **Shift Ranges**: Shift Pagi (`08:00 - 16:00`) & Shift Malam (`16:00 - 24:00`). Transaksi jam 08:00 pagi otomatis tepat tergolong ke Shift Pagi.

@@ -502,6 +502,64 @@ async function _writeHeaderAndDashboard(id: string) {
     },
   });
   await sheets.spreadsheets.batchUpdate({ spreadsheetId: id, requestBody: { requests: fmt } });
+
+  // --- CHART (biar visual kaya dashboard web): omzet 7 hari (kolom) + metode bayar (pie). ---
+  try {
+    const withCharts = await sheets.spreadsheets.get({
+      spreadsheetId: id,
+      fields: "sheets(properties(sheetId),charts(chartId))",
+    });
+    const dashSheet = (withCharts.data.sheets || []).find((s) => s.properties?.sheetId === dashId);
+    const delReqs = (dashSheet?.charts || []).map((c) => ({ deleteEmbeddedObject: { objectId: c.chartId } }));
+
+    const trenIdx = rows.findIndex((r) => String(r[0] ?? "").startsWith("■ TREN"));
+    const metodeIdx = rows.findIndex((r) => String(r[0] ?? "").startsWith("■ METODE"));
+    const chartReqs: any[] = [];
+
+    if (trenIdx >= 0) {
+      const t = trenIdx + 1; // 7 baris data setelah header seksi
+      chartReqs.push({
+        addChart: {
+          chart: {
+            spec: {
+              title: "Omzet 7 Hari Terakhir",
+              basicChart: {
+                chartType: "COLUMN",
+                legendPosition: "NO_LEGEND",
+                headerCount: 0,
+                domains: [{ domain: { sourceRange: { sources: [{ sheetId: dashId, startRowIndex: t, endRowIndex: t + 7, startColumnIndex: 0, endColumnIndex: 1 }] } } }],
+                series: [{ series: { sourceRange: { sources: [{ sheetId: dashId, startRowIndex: t, endRowIndex: t + 7, startColumnIndex: 1, endColumnIndex: 2 }] } }, targetAxis: "LEFT_AXIS" }],
+              },
+            },
+            position: { overlayPosition: { anchorCell: { sheetId: dashId, rowIndex: 2, columnIndex: 4 }, offsetXPixels: 6, widthPixels: 460, heightPixels: 240 } },
+          },
+        },
+      });
+    }
+    if (metodeIdx >= 0) {
+      const m = metodeIdx + 1; // 4 baris (Tunai/QRIS/Transfer/Lainnya)
+      chartReqs.push({
+        addChart: {
+          chart: {
+            spec: {
+              title: "Metode Pembayaran",
+              pieChart: {
+                legendPosition: "RIGHT_LEGEND",
+                domain: { sourceRange: { sources: [{ sheetId: dashId, startRowIndex: m, endRowIndex: m + 4, startColumnIndex: 0, endColumnIndex: 1 }] } },
+                series: { sourceRange: { sources: [{ sheetId: dashId, startRowIndex: m, endRowIndex: m + 4, startColumnIndex: 1, endColumnIndex: 2 }] } },
+              },
+            },
+            position: { overlayPosition: { anchorCell: { sheetId: dashId, rowIndex: 15, columnIndex: 4 }, offsetXPixels: 6, widthPixels: 460, heightPixels: 240 } },
+          },
+        },
+      });
+    }
+    if (delReqs.length || chartReqs.length) {
+      await sheets.spreadsheets.batchUpdate({ spreadsheetId: id, requestBody: { requests: [...delReqs, ...chartReqs] } });
+    }
+  } catch (e) {
+    console.error("dashboard charts:", (e as Error).message);
+  }
 }
 
 function a7(off: number): (string | number)[] {

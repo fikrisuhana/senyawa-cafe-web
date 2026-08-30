@@ -890,34 +890,47 @@ export async function syncRekapMenu(): Promise<void> {
     });
     const menuNames = menus.map((m) => m.name);
 
-    // Qty per (tanggal, menu) dari item transaksi ACTIVE.
+    // Nama shift dari Setting (mis. Pagi/Malam) — kolom "Shift" per baris.
+    const shiftNames = (await shiftRanges()).map((r) => r.name);
+
+    // Qty per (tanggal, shift, menu) dari item transaksi ACTIVE.
     const items = await prisma.transactionItem.findMany({
       where: { transaction: { status: "ACTIVE" } },
-      select: { name: true, qty: true, transaction: { select: { businessDate: true } } },
+      select: { name: true, qty: true, transaction: { select: { businessDate: true, shift: true } } },
     });
-    const grid = new Map<string, Map<string, number>>();
+    // grid: date -> shift -> menu -> qty
+    const grid = new Map<string, Map<string, Map<string, number>>>();
     for (const it of items) {
       const d = it.transaction?.businessDate;
       if (!d) continue;
-      let row = grid.get(d);
-      if (!row) {
-        row = new Map();
-        grid.set(d, row);
-      }
-      row.set(it.name, (row.get(it.name) || 0) + it.qty);
+      const sh = it.transaction?.shift || "(lain)";
+      let byShift = grid.get(d);
+      if (!byShift) { byShift = new Map(); grid.set(d, byShift); }
+      let byMenu = byShift.get(sh);
+      if (!byMenu) { byMenu = new Map(); byShift.set(sh, byMenu); }
+      byMenu.set(it.name, (byMenu.get(it.name) || 0) + it.qty);
     }
 
     const dates = [...grid.keys()].filter(Boolean).sort();
-    const header = ["Tanggal", ...menuNames, "TOTAL"];
-    const rows = dates.map((d) => {
-      const row = grid.get(d)!;
-      const cells = menuNames.map((n) => row.get(n) || 0);
-      const total = cells.reduce((s, v) => s + v, 0);
-      return [d, ...cells, total];
-    });
-    const totalsPerMenu = menuNames.map((n) => dates.reduce((s, d) => s + (grid.get(d)!.get(n) || 0), 0));
+    const header = ["Tanggal", "Shift", ...menuNames, "TOTAL"];
+    const grandPerMenu = new Map<string, number>();
+    const rows: (string | number)[][] = [];
+    for (const d of dates) {
+      const byShift = grid.get(d)!;
+      const order = [...new Set([...shiftNames, ...byShift.keys()])]; // shift Setting dulu, lalu lainnya
+      for (const sh of order) {
+        const byMenu = byShift.get(sh);
+        if (!byMenu) continue; // shift tanpa penjualan hari itu → skip biar ringkas
+        const cells = menuNames.map((n) => byMenu.get(n) || 0);
+        const total = cells.reduce((s, v) => s + v, 0);
+        if (total === 0) continue;
+        cells.forEach((v, i) => grandPerMenu.set(menuNames[i], (grandPerMenu.get(menuNames[i]) || 0) + v));
+        rows.push([d, sh, ...cells, total]);
+      }
+    }
+    const totalsPerMenu = menuNames.map((n) => grandPerMenu.get(n) || 0);
     const grand = totalsPerMenu.reduce((s, v) => s + v, 0);
-    const footer = ["TOTAL", ...totalsPerMenu, grand];
+    const footer = ["TOTAL", "", ...totalsPerMenu, grand];
 
     await sheets.spreadsheets.values.clear({ spreadsheetId: id, range: "'Rekap_Menu'!A1:ZZ" });
     await sheets.spreadsheets.values.update({
@@ -958,14 +971,14 @@ export async function syncRekapMenu(): Promise<void> {
           },
           {
             repeatCell: {
-              range: { sheetId: sid, startRowIndex: 1, endRowIndex: lastRow, startColumnIndex: 1, endColumnIndex: nCols },
+              range: { sheetId: sid, startRowIndex: 1, endRowIndex: lastRow, startColumnIndex: 2, endColumnIndex: nCols },
               cell: { userEnteredFormat: { numberFormat: { type: "NUMBER", pattern: "#,##0" }, horizontalAlignment: "CENTER" } },
               fields: "userEnteredFormat(numberFormat,horizontalAlignment)",
             },
           },
           {
             updateSheetProperties: {
-              properties: { sheetId: sid, gridProperties: { frozenRowCount: 1, frozenColumnCount: 1 } },
+              properties: { sheetId: sid, gridProperties: { frozenRowCount: 1, frozenColumnCount: 2 } },
               fields: "gridProperties(frozenRowCount,frozenColumnCount)",
             },
           },

@@ -35,9 +35,18 @@ export async function POST(req: Request) {
 
   const settings = await getSettings();
   const now = new Date();
-  const businessDate = businessDateKey(now, settings.dayCutoffHour);
-  // Shift otomatis dari jam trx (Setting shiftHours, mis. Pagi 8-16 / Malam 16-24).
-  const shift = shiftNameForHour(now.getHours(), await shiftRanges());
+  // Waktu jual ASLI dari HP (offline-first): pakai `createdAt` klien kalau valid,
+  // fallback ke jam server (jualan online real-time). Biar transaksi yang baru
+  // kesync belakangan tetap masuk ke shift & hari usaha yang benar.
+  const soldAtRaw = body.createdAt ? new Date(String(body.createdAt)) : now;
+  const soldAt = isNaN(soldAtRaw.getTime()) ? now : soldAtRaw;
+  // businessDate dari HP kalau formatnya benar (sama pola dgn /api/cash & /api/attendance).
+  const businessDate =
+    typeof body.businessDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.businessDate)
+      ? body.businessDate
+      : businessDateKey(soldAt, settings.dayCutoffHour);
+  // Shift dari jam JUAL asli (Setting shiftHours, mis. Pagi 8-16 / Malam 16-24).
+  const shift = shiftNameForHour(soldAt.getHours(), await shiftRanges());
 
   try {
     const result = await prisma.$transaction(async (tx) => {

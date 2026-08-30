@@ -441,6 +441,67 @@ async function _writeHeaderAndDashboard(id: string) {
       ],
     },
   });
+
+  // --- Pemanis tampilan (tak menyentuh rumus): judul, header seksi hijau, Rp, highlight B4/B5, lebar kolom. ---
+  const fmt: any[] = [];
+  // Judul (A1) besar tebal.
+  fmt.push({
+    repeatCell: {
+      range: { sheetId: dashId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 1 },
+      cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 14 } } },
+      fields: "userEnteredFormat.textFormat",
+    },
+  });
+  // Highlight selektor periode B4:B5 (kuning) — biar owner tahu ini yang diedit.
+  fmt.push({
+    repeatCell: {
+      range: { sheetId: dashId, startRowIndex: 3, endRowIndex: 5, startColumnIndex: 1, endColumnIndex: 2 },
+      cell: { userEnteredFormat: { backgroundColor: { red: 1, green: 0.95, blue: 0.7 }, textFormat: { bold: true } } },
+      fields: "userEnteredFormat(backgroundColor,textFormat)",
+    },
+  });
+  const money = /omzet|modal|untung|rata-rata|tunai|qris|transfer|lainnya|kas (masuk|keluar)|biaya/i;
+  rows.forEach((r, i) => {
+    const label = String(r[0] ?? "");
+    if (label.startsWith("■")) {
+      fmt.push({
+        repeatCell: {
+          range: { sheetId: dashId, startRowIndex: i, endRowIndex: i + 1, startColumnIndex: 0, endColumnIndex: 3 },
+          cell: {
+            userEnteredFormat: {
+              backgroundColor: { red: 0.17, green: 0.34, blue: 0.18 },
+              textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } },
+            },
+          },
+          fields: "userEnteredFormat(backgroundColor,textFormat)",
+        },
+      });
+    } else if (money.test(label)) {
+      fmt.push({
+        repeatCell: {
+          range: { sheetId: dashId, startRowIndex: i, endRowIndex: i + 1, startColumnIndex: 1, endColumnIndex: 2 },
+          cell: { userEnteredFormat: { numberFormat: { type: "CURRENCY", pattern: '"Rp"#,##0' } } },
+          fields: "userEnteredFormat.numberFormat",
+        },
+      });
+    }
+  });
+  // Lebar kolom A (label) & B (nilai).
+  fmt.push({
+    updateDimensionProperties: {
+      range: { sheetId: dashId, dimension: "COLUMNS", startIndex: 0, endIndex: 1 },
+      properties: { pixelSize: 260 },
+      fields: "pixelSize",
+    },
+  });
+  fmt.push({
+    updateDimensionProperties: {
+      range: { sheetId: dashId, dimension: "COLUMNS", startIndex: 1, endIndex: 3 },
+      properties: { pixelSize: 130 },
+      fields: "pixelSize",
+    },
+  });
+  await sheets.spreadsheets.batchUpdate({ spreadsheetId: id, requestBody: { requests: fmt } });
 }
 
 function a7(off: number): (string | number)[] {

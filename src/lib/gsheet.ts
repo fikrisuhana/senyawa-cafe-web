@@ -982,6 +982,12 @@ export async function syncRekapMenu(): Promise<void> {
               fields: "gridProperties(frozenRowCount,frozenColumnCount)",
             },
           },
+          {
+            // Filter native di header → owner bisa pilih bulan/tanggal/shift (kaya selektor web).
+            setBasicFilter: {
+              filter: { range: { sheetId: sid, startRowIndex: 0, endRowIndex: 1 + rows.length, startColumnIndex: 0, endColumnIndex: nCols } },
+            },
+          },
         ],
       },
     });

@@ -18,10 +18,12 @@ export async function POST(req: Request) {
         : await tx.transaction.findUnique({ where: { clientId } });
       if (!trx) throw new Error("Transaksi tidak ditemukan");
       if (trx.status === "VOID") throw new Error("Transaksi sudah dibatalkan");
+      // Pakai id transaksi HASIL find (HP kirim clientId, bukan id) — bukan `id` mentah.
+      const tid = trx.id;
 
       // Kembalikan stok bahan dari pergerakan SALE transaksi ini.
       const moves = await tx.stockMovement.findMany({
-        where: { transactionId: id, type: "SALE" },
+        where: { transactionId: tid, type: "SALE" },
       });
       for (const mv of moves) {
         const p = await tx.packaging.findUnique({ where: { id: mv.packagingId } });
@@ -38,7 +40,7 @@ export async function POST(req: Request) {
             after,
             note: "Pembatalan " + trx.code,
             userName: user.name,
-            transactionId: id,
+            transactionId: tid,
           },
         });
       }
@@ -52,7 +54,7 @@ export async function POST(req: Request) {
       }
 
       await tx.transaction.update({
-        where: { id },
+        where: { id: tid },
         data: {
           status: "VOID",
           voidedAt: new Date(),

@@ -15,7 +15,8 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const items: InItem[] = Array.isArray(body.items) ? body.items : [];
   const paid = Number(body.paid) || 0;
-  const payment = String(body.payment || "TUNAI");
+  // Normalisasi ke UPPERCASE biar konsisten (TUNAI/QRIS/TRANSFER) — cocok dgn rumus Sheet.
+  const payment = String(body.payment || "TUNAI").toUpperCase();
   const orderType = body.orderType === "TAKEAWAY" ? "TAKEAWAY" : "DINEIN";
   const note = body.note ? String(body.note) : null;
   const voucherId: string | null = body.voucherId || null;

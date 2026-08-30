@@ -742,6 +742,122 @@ export async function appendTransactionToSheet(trxId: string): Promise<void> {
 }
 
 /** Tulis ulang seluruh tab Transaksi dari DB + refresh header/dashboard + katalog. */
+/**
+ * Rekap penjualan per MENU per hari (matriks): baris = tanggal, kolom = tiap menu,
+ * nilai = jumlah terjual (qty). Meniru template "Rekap Harian" owner. Tab: Rekap_Menu.
+ * Bikin tab + header + format walau data kosong.
+ */
+export async function syncRekapMenu(): Promise<void> {
+  try {
+    if (!sheetEnabled()) return;
+    const id = await getOrCreateSheet();
+    if (!id) return;
+    const auth = jwt();
+    if (!auth) return;
+    const sheets = google.sheets({ version: "v4", auth });
+
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: id });
+    if (!(meta.data.sheets || []).some((x) => x.properties?.title === "Rekap_Menu")) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: id,
+        requestBody: { requests: [{ addSheet: { properties: { title: "Rekap_Menu" } } }] },
+      });
+    }
+
+    // Menu diurut per kategori (minuman dulu, makanan belakangan) → kolom rapi.
+    const menus = await prisma.menuItem.findMany({
+      orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
+      select: { name: true },
+    });
+    const menuNames = menus.map((m) => m.name);
+
+    // Qty per (tanggal, menu) dari item transaksi ACTIVE.
+    const items = await prisma.transactionItem.findMany({
+      where: { transaction: { status: "ACTIVE" } },
+      select: { name: true, qty: true, transaction: { select: { businessDate: true } } },
+    });
+    const grid = new Map<string, Map<string, number>>();
+    for (const it of items) {
+      const d = it.transaction?.businessDate;
+      if (!d) continue;
+      let row = grid.get(d);
+      if (!row) {
+        row = new Map();
+        grid.set(d, row);
+      }
+      row.set(it.name, (row.get(it.name) || 0) + it.qty);
+    }
+
+    const dates = [...grid.keys()].filter(Boolean).sort();
+    const header = ["Tanggal", ...menuNames, "TOTAL"];
+    const rows = dates.map((d) => {
+      const row = grid.get(d)!;
+      const cells = menuNames.map((n) => row.get(n) || 0);
+      const total = cells.reduce((s, v) => s + v, 0);
+      return [d, ...cells, total];
+    });
+    const totalsPerMenu = menuNames.map((n) => dates.reduce((s, d) => s + (grid.get(d)!.get(n) || 0), 0));
+    const grand = totalsPerMenu.reduce((s, v) => s + v, 0);
+    const footer = ["TOTAL", ...totalsPerMenu, grand];
+
+    await sheets.spreadsheets.values.clear({ spreadsheetId: id, range: "'Rekap_Menu'!A1:ZZ" });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: id,
+      range: "'Rekap_Menu'!A1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [header, ...rows, footer] },
+    });
+
+    // Format: header hijau tebal, kolom TOTAL & baris TOTAL tebal, freeze, angka ribuan.
+    const sid = await _sheetIdByTitle(id, sheets, "Rekap_Menu");
+    const nCols = header.length;
+    const lastRow = 1 + rows.length + 1; // header + data + footer
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: id,
+      requestBody: {
+        requests: [
+          {
+            repeatCell: {
+              range: { sheetId: sid, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: nCols },
+              cell: {
+                userEnteredFormat: {
+                  backgroundColor: { red: 0.17, green: 0.34, blue: 0.18 },
+                  textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                  horizontalAlignment: "CENTER",
+                  wrapStrategy: "WRAP",
+                },
+              },
+              fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,wrapStrategy)",
+            },
+          },
+          {
+            repeatCell: {
+              range: { sheetId: sid, startRowIndex: lastRow - 1, endRowIndex: lastRow, startColumnIndex: 0, endColumnIndex: nCols },
+              cell: { userEnteredFormat: { backgroundColor: { red: 0.9, green: 0.94, blue: 0.88 }, textFormat: { bold: true } } },
+              fields: "userEnteredFormat(backgroundColor,textFormat)",
+            },
+          },
+          {
+            repeatCell: {
+              range: { sheetId: sid, startRowIndex: 1, endRowIndex: lastRow, startColumnIndex: 1, endColumnIndex: nCols },
+              cell: { userEnteredFormat: { numberFormat: { type: "NUMBER", pattern: "#,##0" }, horizontalAlignment: "CENTER" } },
+              fields: "userEnteredFormat(numberFormat,horizontalAlignment)",
+            },
+          },
+          {
+            updateSheetProperties: {
+              properties: { sheetId: sid, gridProperties: { frozenRowCount: 1, frozenColumnCount: 1 } },
+              fields: "gridProperties(frozenRowCount,frozenColumnCount)",
+            },
+          },
+        ],
+      },
+    });
+  } catch (e) {
+    console.error("syncRekapMenu:", (e as Error).message);
+  }
+}
+
 export async function rebuildSheet(): Promise<string | null> {
   if (!sheetEnabled()) return null;
   const id = await getOrCreateSheet();
@@ -768,7 +884,8 @@ export async function rebuildSheet(): Promise<string | null> {
   await syncCatalogToSheet();
   await syncOpsToSheet();
   await ensureJadwalTab(); // matriks absensi per shift
-  await syncRekapHarian(); // rekap per hari
+  await syncRekapHarian(); // rekap finansial per hari
+  await syncRekapMenu(); // matriks penjualan per menu per hari
   return id;
 }
 

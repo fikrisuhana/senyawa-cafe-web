@@ -975,6 +975,14 @@ export async function syncRekapMenu(): Promise<void> {
       requestBody: {
         requests: [
           { clearBasicFilter: { sheetId: sid } }, // buang filter lama biar merge header aman
+          {
+            // Freeze DULU (2 baris header + kolom Tanggal) sebelum merge — biar merge
+            // baris 0-1 tak lintas batas frozen (error "merge frozen and non-frozen").
+            updateSheetProperties: {
+              properties: { sheetId: sid, gridProperties: { frozenRowCount: 2, frozenColumnCount: 1 } },
+              fields: "gridProperties(frozenRowCount,frozenColumnCount)",
+            },
+          },
           ...merges,
           {
             repeatCell: {
@@ -1003,12 +1011,6 @@ export async function syncRekapMenu(): Promise<void> {
               range: { sheetId: sid, startRowIndex: 2, endRowIndex: lastRow, startColumnIndex: 1, endColumnIndex: nCols },
               cell: { userEnteredFormat: { numberFormat: { type: "NUMBER", pattern: "#,##0" }, horizontalAlignment: "CENTER" } },
               fields: "userEnteredFormat(numberFormat,horizontalAlignment)",
-            },
-          },
-          {
-            updateSheetProperties: {
-              properties: { sheetId: sid, gridProperties: { frozenRowCount: 2, frozenColumnCount: 1 } },
-              fields: "gridProperties(frozenRowCount,frozenColumnCount)",
             },
           },
         ],

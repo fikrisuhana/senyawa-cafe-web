@@ -912,54 +912,83 @@ export async function syncRekapMenu(): Promise<void> {
     }
 
     const dates = [...grid.keys()].filter(Boolean).sort();
-    const header = ["Tanggal", "Shift", ...menuNames, "TOTAL"];
-    const grandPerMenu = new Map<string, number>();
-    const rows: (string | number)[][] = [];
-    for (const d of dates) {
-      const byShift = grid.get(d)!;
-      const order = [...new Set([...shiftNames, ...byShift.keys()])]; // shift Setting dulu, lalu lainnya
-      for (const sh of order) {
-        const byMenu = byShift.get(sh);
-        if (!byMenu) continue; // shift tanpa penjualan hari itu → skip biar ringkas
-        const cells = menuNames.map((n) => byMenu.get(n) || 0);
-        const total = cells.reduce((s, v) => s + v, 0);
-        if (total === 0) continue;
-        cells.forEach((v, i) => grandPerMenu.set(menuNames[i], (grandPerMenu.get(menuNames[i]) || 0) + v));
-        rows.push([d, sh, ...cells, total]);
-      }
+    const nShift = shiftNames.length;
+
+    // Header 2 BARIS: baris1 = nama menu (merge lebar nShift), baris2 = nama shift (Pagi/Malam).
+    const header1: (string | number)[] = ["Tanggal"];
+    const header2: (string | number)[] = [""];
+    for (const m of menuNames) {
+      header1.push(m);
+      for (let i = 1; i < nShift; i++) header1.push("");
+      for (const s of shiftNames) header2.push(s);
     }
-    const totalsPerMenu = menuNames.map((n) => grandPerMenu.get(n) || 0);
-    const grand = totalsPerMenu.reduce((s, v) => s + v, 0);
-    const footer = ["TOTAL", "", ...totalsPerMenu, grand];
+    header1.push("TOTAL");
+    header2.push("");
+
+    // Satu baris = satu tanggal; tiap menu punya nShift sel (qty per shift).
+    const grandPerCol: number[] = new Array(menuNames.length * nShift).fill(0);
+    const dataRows: (string | number)[][] = dates.map((d) => {
+      const byShift = grid.get(d)!;
+      const cells: number[] = [];
+      let rowTotal = 0;
+      let ci = 0;
+      for (const m of menuNames) {
+        for (const s of shiftNames) {
+          const q = byShift.get(s)?.get(m) || 0;
+          cells.push(q);
+          rowTotal += q;
+          grandPerCol[ci] += q;
+          ci++;
+        }
+      }
+      return [d, ...cells, rowTotal];
+    });
+    const grand = grandPerCol.reduce((a, b) => a + b, 0);
+    const footer = ["TOTAL", ...grandPerCol, grand];
+
+    const nCols = header1.length; // 1 (Tanggal) + menu*nShift + 1 (TOTAL)
+    const totalColIdx = nCols - 1;
 
     await sheets.spreadsheets.values.clear({ spreadsheetId: id, range: "'Rekap_Menu'!A1:ZZ" });
     await sheets.spreadsheets.values.update({
       spreadsheetId: id,
       range: "'Rekap_Menu'!A1",
       valueInputOption: "USER_ENTERED",
-      requestBody: { values: [header, ...rows, footer] },
+      requestBody: { values: [header1, header2, ...dataRows, footer] },
     });
 
-    // Format: header hijau tebal, kolom TOTAL & baris TOTAL tebal, freeze, angka ribuan.
     const sid = await _sheetIdByTitle(id, sheets, "Rekap_Menu");
-    const nCols = header.length;
-    const lastRow = 1 + rows.length + 1; // header + data + footer
+    const lastRow = 2 + dataRows.length + 1; // 2 header + data + footer
+
+    // Merge header: Tanggal (A1:A2), tiap menu (baris1 selebar nShift), TOTAL (2 baris).
+    const merges: any[] = [
+      { mergeCells: { range: { sheetId: sid, startRowIndex: 0, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 1 }, mergeType: "MERGE_ALL" } },
+      { mergeCells: { range: { sheetId: sid, startRowIndex: 0, endRowIndex: 2, startColumnIndex: totalColIdx, endColumnIndex: totalColIdx + 1 }, mergeType: "MERGE_ALL" } },
+    ];
+    for (let mi = 0; mi < menuNames.length; mi++) {
+      const start = 1 + mi * nShift;
+      merges.push({ mergeCells: { range: { sheetId: sid, startRowIndex: 0, endRowIndex: 1, startColumnIndex: start, endColumnIndex: start + nShift }, mergeType: "MERGE_ALL" } });
+    }
+
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId: id,
       requestBody: {
         requests: [
+          { clearBasicFilter: { sheetId: sid } }, // buang filter lama biar merge header aman
+          ...merges,
           {
             repeatCell: {
-              range: { sheetId: sid, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: nCols },
+              range: { sheetId: sid, startRowIndex: 0, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: nCols },
               cell: {
                 userEnteredFormat: {
                   backgroundColor: { red: 0.17, green: 0.34, blue: 0.18 },
                   textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } },
                   horizontalAlignment: "CENTER",
+                  verticalAlignment: "MIDDLE",
                   wrapStrategy: "WRAP",
                 },
               },
-              fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,wrapStrategy)",
+              fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy)",
             },
           },
           {
@@ -971,21 +1000,15 @@ export async function syncRekapMenu(): Promise<void> {
           },
           {
             repeatCell: {
-              range: { sheetId: sid, startRowIndex: 1, endRowIndex: lastRow, startColumnIndex: 2, endColumnIndex: nCols },
+              range: { sheetId: sid, startRowIndex: 2, endRowIndex: lastRow, startColumnIndex: 1, endColumnIndex: nCols },
               cell: { userEnteredFormat: { numberFormat: { type: "NUMBER", pattern: "#,##0" }, horizontalAlignment: "CENTER" } },
               fields: "userEnteredFormat(numberFormat,horizontalAlignment)",
             },
           },
           {
             updateSheetProperties: {
-              properties: { sheetId: sid, gridProperties: { frozenRowCount: 1, frozenColumnCount: 2 } },
+              properties: { sheetId: sid, gridProperties: { frozenRowCount: 2, frozenColumnCount: 1 } },
               fields: "gridProperties(frozenRowCount,frozenColumnCount)",
-            },
-          },
-          {
-            // Filter native di header → owner bisa pilih bulan/tanggal/shift (kaya selektor web).
-            setBasicFilter: {
-              filter: { range: { sheetId: sid, startRowIndex: 0, endRowIndex: 1 + rows.length, startColumnIndex: 0, endColumnIndex: nCols } },
             },
           },
         ],

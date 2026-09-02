@@ -8,6 +8,69 @@ import { shiftRanges, shiftNameForHour } from "@/lib/shifts";
 
 type InItem = { id: string; qty: number; optionIds?: string[]; note?: string };
 
+// GET /api/transactions?date=YYYY-MM-DD&days=N
+// Tarik transaksi (businessDate date-(N-1) .. date, default hari ini & 1 hari)
+// + item-nya — dipakai HP untuk RESTORE setelah logout/hapus data: rekap HP
+// baca DB lokal, jadi penjualan yang sudah ada di server harus bisa turun lagi.
+export async function GET(req: Request) {
+  const user = await getAuthFromRequest(req);
+  if (!user) return NextResponse.json({ error: "Belum login" }, { status: 401 });
+
+  const url = new URL(req.url);
+  const days = Math.min(7, Math.max(1, Number(url.searchParams.get("days")) || 1));
+  let endDate = url.searchParams.get("date");
+  if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    const settings = await getSettings();
+    endDate = businessDateKey(new Date(), settings.dayCutoffHour);
+  }
+  const end = new Date(`${endDate}T00:00:00`);
+  const from = new Date(end);
+  from.setDate(from.getDate() - (days - 1));
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const fromDate = `${from.getFullYear()}-${pad(from.getMonth() + 1)}-${pad(from.getDate())}`;
+
+  const rows = await prisma.transaction.findMany({
+    where: { businessDate: { gte: fromDate, lte: endDate } },
+    orderBy: { createdAt: "asc" },
+    include: { items: true },
+  });
+
+  return NextResponse.json({
+    ok: true,
+    from: fromDate,
+    to: endDate,
+    transactions: rows.map((t) => ({
+      id: t.id,
+      code: t.code,
+      clientId: t.clientId,
+      cashierName: t.cashierName,
+      createdAt: t.createdAt.toISOString(),
+      businessDate: t.businessDate,
+      shift: t.shift,
+      payment: t.payment,
+      orderType: t.orderType,
+      subtotal: t.grossTotal,
+      discount: t.discount,
+      voucherName: t.voucherName,
+      total: t.total,
+      costTotal: t.costTotal,
+      paid: t.paid,
+      change: t.change,
+      status: t.status,
+      items: t.items.map((i) => ({
+        name: i.name,
+        category: i.category,
+        price: i.price,
+        cost: i.cost,
+        qty: i.qty,
+        subtotal: i.subtotal,
+        variants: i.variants,
+        note: i.note,
+      })),
+    })),
+  });
+}
+
 export async function POST(req: Request) {
   const user = await getAuthFromRequest(req);
   if (!user) return NextResponse.json({ error: "Belum login" }, { status: 401 });

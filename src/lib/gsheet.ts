@@ -18,6 +18,9 @@ const SCOPES = [
 const TX_HEADER = [
   "kode", "hari_usaha", "waktu", "kasir", "tipe", "metode",
   "subtotal", "diskon", "voucher", "total", "modal", "status",
+  // Kolom M, N ditambah di UJUNG — JANGAN sisip di tengah (rumus dashboard
+  // pakai huruf kolom B/F/J/K/L, geser = rusak).
+  "no_order", "nama_customer",
 ];
 
 function creds(): { client_email: string; private_key: string } | null {
@@ -851,6 +854,7 @@ export async function appendTransactionToSheet(trxId: string): Promise<void> {
           t.code, t.businessDate, new Date(t.createdAt).toISOString(), t.cashierName,
           t.orderType, t.payment, t.grossTotal, t.discount, t.voucherName || "",
           t.total, t.costTotal, t.status,
+          t.orderCode || "", t.customerName || "", // kolom M, N
         ]],
       },
     });
@@ -1034,6 +1038,7 @@ export async function rebuildSheet(): Promise<string | null> {
     t.code, t.businessDate, new Date(t.createdAt).toISOString(), t.cashierName,
     t.orderType, t.payment, t.grossTotal, t.discount, t.voucherName || "",
     t.total, t.costTotal, t.status,
+    t.orderCode || "", t.customerName || "", // kolom M, N
   ]);
 
   await sheets.spreadsheets.values.clear({ spreadsheetId: id, range: "'Transaksi'!A2:Z" });

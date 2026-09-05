@@ -137,6 +137,8 @@ model Transaction {
   payment      String            @default("TUNAI")
   orderType    String            @default("DINEIN") // DINEIN | TAKEAWAY
   note         String?
+  customerName String? // nama pelanggan (opsional, diketik kasir)
+  orderCode    String? // kode order gaya barista, mis. "AB99" ([tglGanjil/Genap][shift][no urut harian])
   businessDate String
   shift        String? // nama shift saat trx dibuat (dinamis dari Setting shiftHours)
   status       String            @default("ACTIVE") // ACTIVE | VOID

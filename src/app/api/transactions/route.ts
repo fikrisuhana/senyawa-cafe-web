@@ -82,6 +82,8 @@ export async function POST(req: Request) {
   const payment = String(body.payment || "TUNAI").toUpperCase();
   const orderType = body.orderType === "TAKEAWAY" ? "TAKEAWAY" : "DINEIN";
   const note = body.note ? String(body.note) : null;
+  const customerName = body.customerName ? String(body.customerName).slice(0, 60) : null;
+  const orderCode = body.orderCode ? String(body.orderCode).slice(0, 20) : null;
   const voucherId: string | null = body.voucherId || null;
   const manualDiscount = Math.max(0, Math.round(Number(body.manualDiscount) || 0));
   // UUID dari aplikasi HP → anti-dobel saat sinkron ulang (idempotent).
@@ -212,6 +214,8 @@ export async function POST(req: Request) {
           payment,
           orderType,
           note,
+          customerName,
+          orderCode,
           businessDate,
           shift,
           items: { create: txItems },

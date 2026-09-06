@@ -9,6 +9,7 @@ import ShiftFilter from "@/components/ShiftFilter";
 import CashClient from "@/components/CashClient";
 import BelanjaClient from "@/components/BelanjaClient";
 import DeleteCash from "@/components/DeleteCash";
+import EditCash from "@/components/EditCash";
 import { DollarSign, Wallet, TrendingUp, TrendingDown, CreditCard, ShoppingBag, Banknote } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -219,7 +220,10 @@ export default async function KeuanganPage({
                       {rupiah(e.amount)}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <DeleteCash id={e.id} />
+                      <div className="inline-flex items-center gap-1">
+                        <EditCash entry={{ id: e.id, type: e.type, amount: e.amount, category: e.category, note: e.note }} />
+                        <DeleteCash id={e.id} />
+                      </div>
                     </td>
                   </tr>
                 ))}

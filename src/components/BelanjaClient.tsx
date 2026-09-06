@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import EditPurchase from "@/components/EditPurchase";
 import { useRouter } from "next/navigation";
 import { rupiah } from "@/lib/format";
 
@@ -288,6 +289,9 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
               <p className="text-[10px] text-slate-400">
                 {r.businessDate} · {r.userName || "Admin"}
               </p>
+              <EditPurchase
+                row={{ id: r.id, itemName: r.itemName, category: r.category, qty: r.qty, unit: r.unit, unitPrice: r.unitPrice, note: r.note }}
+              />
             </div>
           </div>
         ))}

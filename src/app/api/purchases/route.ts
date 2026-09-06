@@ -135,3 +135,44 @@ export async function POST(req: Request) {
   void syncOpsToSheet(); // mirror ke Google Sheet (tab Belanja + Restok_Log + Rekap_Harian)
   return NextResponse.json({ ok: true, id: p.id, total, notaUrl, notaWarning });
 }
+
+// Edit catatan belanja: nama / qty / harga / unit / keterangan / kategori.
+// CATATAN: ini koreksi CATATAN (akuntansi) — stok yang sudah masuk saat belanja
+// TIDAK ikut diubah (barang fisik sudah terlanjur masuk).
+export async function PUT(req: Request) {
+  const user = await getAuthFromRequest(req);
+  if (!user) return NextResponse.json({ error: "Belum login" }, { status: 401 });
+  const b = await req.json().catch(() => ({}));
+  const id = b.id ? String(b.id) : "";
+  if (!id) return NextResponse.json({ error: "id wajib" }, { status: 400 });
+
+  const existing = await prisma.purchase.findUnique({ where: { id } });
+  if (!existing) return NextResponse.json({ error: "Catatan tak ditemukan" }, { status: 404 });
+
+  const data: {
+    itemName?: string; category?: string; unit?: string | null;
+    note?: string | null; qty?: number; unitPrice?: number; total?: number;
+  } = {};
+  if (b.itemName !== undefined) {
+    const n = String(b.itemName || "").trim();
+    if (!n) return NextResponse.json({ error: "Nama/deskripsi wajib" }, { status: 400 });
+    data.itemName = n;
+  }
+  if (b.category !== undefined && ["BELANJA", "GAJI", "LAIN"].includes(b.category)) data.category = b.category;
+  if (b.unit !== undefined) data.unit = b.unit ? String(b.unit).slice(0, 20) : null;
+  if (b.note !== undefined) data.note = b.note ? String(b.note).slice(0, 200) : null;
+  if (b.qty !== undefined || b.unitPrice !== undefined) {
+    const qty = b.qty !== undefined ? Math.max(1, Math.round(Number(b.qty) || 1)) : existing.qty;
+    const unitPrice = b.unitPrice !== undefined ? Math.round(Number(b.unitPrice) || 0) : existing.unitPrice;
+    if (unitPrice <= 0) return NextResponse.json({ error: "Nominal harus > 0" }, { status: 400 });
+    data.qty = qty;
+    data.unitPrice = unitPrice;
+    data.total = qty * unitPrice;
+  }
+  if (Object.keys(data).length === 0)
+    return NextResponse.json({ error: "Tidak ada perubahan" }, { status: 400 });
+
+  const p = await prisma.purchase.update({ where: { id }, data });
+  void syncOpsToSheet();
+  return NextResponse.json({ ok: true, id: p.id, total: p.total });
+}

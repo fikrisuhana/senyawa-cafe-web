@@ -13,6 +13,7 @@ const ALLOWED = [
   "quickCash",
   "paperWidth",
   "shifts",
+  "shiftHours", // BUG FIX: dulu kelewat → rentang jam shift gak pernah kesimpen
   "kasAwal",
 ] as const;
 

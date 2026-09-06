@@ -21,7 +21,21 @@ export async function POST(req: Request) {
   const clientId = b.clientId ? String(b.clientId).slice(0, 100) : null;
   if (clientId) {
     const dup = await prisma.cashEntry.findUnique({ where: { clientId } });
-    if (dup) return NextResponse.json({ ok: true, id: dup.id, duplicate: true });
+    if (dup) {
+      // Sudah ada → HP re-push krn DIEDIT (nominal/keterangan/kategori) → UPDATE,
+      // bukan skip. (Retry antre yg tak berubah pun aman: nilainya sama.)
+      const upd = await prisma.cashEntry.update({
+        where: { clientId },
+        data: {
+          type,
+          amount,
+          category: String(b.category || "Lainnya").trim() || "Lainnya",
+          note: b.note ? String(b.note).slice(0, 200) : null,
+        },
+      });
+      void syncOpsToSheet();
+      return NextResponse.json({ ok: true, id: upd.id, updated: true });
+    }
   }
 
   const settings = await getSettings();

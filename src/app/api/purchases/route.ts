@@ -4,6 +4,7 @@ import { getAuthFromRequest } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { businessDateKey } from "@/lib/bizday";
 import { syncOpsToSheet, uploadNotaToDrive } from "@/lib/gsheet";
+import { autoBuyFactor } from "@/lib/units";
 
 const NOTA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"];
 const NOTA_MAX = 8 * 1024 * 1024; // 8MB
@@ -89,18 +90,16 @@ export async function POST(req: Request) {
   if (b.newBahan) {
     const nbName = String(b.newBahan.name || itemName).trim().slice(0, 60);
     if (nbName) {
+      const nbUnit = String(b.newBahan.unit || "pcs").slice(0, 20);
+      const nbBuyUnit = b.newBahan.buyUnit ? String(b.newBahan.buyUnit).slice(0, 20) : null;
+      // Auto Liter→ml / Kg→gram (×1000); pasangan tak dikenal → input manual.
+      const nbFactor = autoBuyFactor(nbUnit, nbBuyUnit) ?? Math.max(1, Math.round(Number(b.newBahan.buyFactor) || 1));
       pack =
         (await prisma.packaging.findUnique({ where: { name: nbName } })) ??
         (await prisma.packaging.create({
-          data: {
-            name: nbName,
-            unit: String(b.newBahan.unit || "pcs").slice(0, 20),
-            buyUnit: b.newBahan.buyUnit ? String(b.newBahan.buyUnit).slice(0, 20) : null,
-            buyFactor: Math.max(1, Math.round(Number(b.newBahan.buyFactor) || 1)),
-            stock: 0,
-          },
+          data: { name: nbName, unit: nbUnit, buyUnit: nbBuyUnit, buyFactor: nbFactor, stock: 0 },
         }));
-      factorOverride = Math.max(1, Math.round(Number(b.newBahan.buyFactor) || 1));
+      factorOverride = nbFactor;
     }
   } else if (b.restockPackagingId) {
     pack = await prisma.packaging.findUnique({ where: { id: String(b.restockPackagingId) } });

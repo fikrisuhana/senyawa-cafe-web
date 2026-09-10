@@ -2,17 +2,22 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { syncCatalogToSheet, syncOpsToSheet } from "@/lib/gsheet";
 import { getSession } from "@/lib/auth";
+import { autoBuyFactor } from "@/lib/units";
 
 export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}));
   if (!b.name) return NextResponse.json({ error: "Nama wajib" }, { status: 400 });
   try {
+    const unit = String(b.unit || "pcs");
+    const buyUnit = b.buyUnit ? String(b.buyUnit).slice(0, 20) : null;
+    // Auto: Liter→ml, Kg→gram = ×1000. Pasangan tak dikenal → pakai input manual.
+    const buyFactor = autoBuyFactor(unit, buyUnit) ?? Math.max(1, Math.round(Number(b.buyFactor) || 1));
     const p = await prisma.packaging.create({
       data: {
         name: String(b.name).trim(),
-        unit: String(b.unit || "pcs"),
-        buyUnit: b.buyUnit ? String(b.buyUnit).slice(0, 20) : null,
-        buyFactor: Math.max(1, Math.round(Number(b.buyFactor) || 1)),
+        unit,
+        buyUnit,
+        buyFactor,
         stock: Number(b.stock) || 0,
         minStock: Number(b.minStock) || 0,
       },
@@ -84,6 +89,15 @@ export async function PUT(req: Request) {
   if (b.buyUnit !== undefined) data.buyUnit = b.buyUnit ? String(b.buyUnit).slice(0, 20) : null;
   if (b.buyFactor !== undefined) data.buyFactor = Math.max(1, Math.round(Number(b.buyFactor) || 1));
   if (b.minStock !== undefined) data.minStock = Math.max(0, Math.round(Number(b.minStock) || 0));
+  // Kalau satuan dasar / satuan beli disentuh → recompute faktor otomatis
+  // (Liter→ml, Kg→gram = ×1000). Override manual cuma buat pasangan tak dikenal.
+  if (b.unit !== undefined || b.buyUnit !== undefined) {
+    const existing = await prisma.packaging.findUnique({ where: { id: b.id } });
+    const effUnit = (data.unit ?? existing?.unit ?? "pcs") as string;
+    const effBuyUnit = (b.buyUnit !== undefined ? data.buyUnit : existing?.buyUnit) as string | null;
+    const auto = autoBuyFactor(effUnit, effBuyUnit);
+    if (auto !== null) data.buyFactor = auto;
+  }
   try {
     await prisma.packaging.update({ where: { id: b.id }, data });
   } catch (e: any) {

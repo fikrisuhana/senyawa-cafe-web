@@ -10,6 +10,7 @@ import PeriodFilter from "@/components/PeriodFilter";
 import ShiftFilter from "@/components/ShiftFilter";
 import SpreadsheetCopy from "@/components/SpreadsheetCopy";
 import VoidButton from "@/components/VoidButton";
+import EditTrx from "@/components/EditTrx";
 import KasClient from "@/components/KasClient";
 import DeleteCash from "@/components/DeleteCash";
 import {
@@ -49,7 +50,7 @@ export default async function RekapPage({
   const shiftNames = (await shiftRanges()).map((r) => r.name);
   const shift = shiftNames.includes(sp.shift || "") ? sp.shift! : "";
 
-  const [all, cashEntries] = await Promise.all([
+  const [all, cashEntries, employees] = await Promise.all([
     prisma.transaction.findMany({
       where: { businessDate: period.filter, ...(shift ? { shift } : {}) },
       include: { items: true },
@@ -59,7 +60,9 @@ export default async function RekapPage({
       where: { businessDate: period.filter },
       orderBy: { createdAt: "desc" },
     }),
+    prisma.employee.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { name: true } }),
   ]);
+  const employeeNames = employees.map((e) => e.name); // buat dropdown edit kasir
   const active = all.filter((t) => t.status !== "VOID");
 
   // Kas & pengeluaran
@@ -438,7 +441,15 @@ export default async function RekapPage({
                       {rupiah(t.total)}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      {!isVoid && <VoidButton id={t.id} code={t.code} />}
+                      <div className="inline-flex items-center justify-end gap-1.5">
+                        {isAdmin && !isVoid && (
+                          <EditTrx
+                            trx={{ id: t.id, code: t.code, cashierName: t.cashierName, payment: t.payment }}
+                            employees={employeeNames}
+                          />
+                        )}
+                        {!isVoid && <VoidButton id={t.id} code={t.code} />}
+                      </div>
                     </td>
                   </tr>
                 );

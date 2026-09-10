@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getAuthFromRequest } from "@/lib/auth";
-import { appendTransactionToSheet } from "@/lib/gsheet";
+import { appendTransactionToSheet, updateTrxFieldsInSheet } from "@/lib/gsheet";
 import { getSettings } from "@/lib/settings";
 import { businessDateKey } from "@/lib/bizday";
 import { shiftRanges, shiftNameForHour } from "@/lib/shifts";
@@ -263,4 +263,43 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
+}
+
+// PUT — ADMIN koreksi transaksi: ganti kasir &/atau metode bayar (mis. kecatat
+// TUNAI padahal QRIS). Metode non-tunai → kembalian di-nol-in (paid = total).
+export async function PUT(req: Request) {
+  const user = await getAuthFromRequest(req);
+  if (!user) return NextResponse.json({ error: "Belum login" }, { status: 401 });
+  if (user.role !== "ADMIN") return NextResponse.json({ error: "Khusus admin" }, { status: 403 });
+
+  const b = await req.json().catch(() => ({}));
+  const id = b.id ? String(b.id) : "";
+  if (!id) return NextResponse.json({ error: "id transaksi wajib" }, { status: 400 });
+
+  const trx = await prisma.transaction.findUnique({ where: { id } });
+  if (!trx) return NextResponse.json({ error: "Transaksi tidak ditemukan" }, { status: 404 });
+
+  const data: { cashierName?: string; payment?: string; change?: number; paid?: number } = {};
+  if (b.cashierName !== undefined) {
+    const c = String(b.cashierName).trim().slice(0, 60);
+    if (c) data.cashierName = c;
+  }
+  if (b.payment !== undefined) {
+    const pay = String(b.payment).toUpperCase().slice(0, 20);
+    if (pay) {
+      data.payment = pay;
+      // Non-tunai bayar pas → tak ada kembalian.
+      if (pay !== "TUNAI") {
+        data.change = 0;
+        data.paid = trx.total;
+      }
+    }
+  }
+  if (Object.keys(data).length === 0)
+    return NextResponse.json({ error: "Tidak ada perubahan" }, { status: 400 });
+
+  const upd = await prisma.transaction.update({ where: { id }, data });
+  // Mirror ke Google Sheet (kolom kasir D & metode F).
+  void updateTrxFieldsInSheet(upd.code, { cashierName: data.cashierName, payment: data.payment });
+  return NextResponse.json({ ok: true, id: upd.id });
 }

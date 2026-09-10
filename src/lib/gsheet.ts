@@ -808,6 +808,37 @@ export async function syncRekapHarian(): Promise<void> {
   }
 }
 
+// Update kolom kasir (D) & metode (F) satu baris transaksi di Sheet (admin edit).
+export async function updateTrxFieldsInSheet(
+  code: string,
+  fields: { cashierName?: string; payment?: string }
+): Promise<void> {
+  try {
+    if (!sheetEnabled()) return;
+    const id = await getOrCreateSheet();
+    if (!id) return;
+    const auth = jwt();
+    if (!auth) return;
+    const sheets = google.sheets({ version: "v4", auth });
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId: id, range: "'Transaksi'!A2:A" });
+    const rows = res.data.values || [];
+    const idx = rows.findIndex((r) => (r[0] || "") === code);
+    if (idx < 0) return;
+    const rowNum = idx + 2; // +1 header, +1 basis-1
+    const data: { range: string; values: string[][] }[] = [];
+    if (fields.cashierName !== undefined) data.push({ range: `'Transaksi'!D${rowNum}`, values: [[fields.cashierName]] });
+    if (fields.payment !== undefined) data.push({ range: `'Transaksi'!F${rowNum}`, values: [[fields.payment]] });
+    if (data.length === 0) return;
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: id,
+      requestBody: { valueInputOption: "RAW", data },
+    });
+    void syncRekapHarian(); // omzet per-metode/kasir bisa berubah
+  } catch (e) {
+    console.error("updateTrxFieldsInSheet gagal:", (e as Error).message);
+  }
+}
+
 export async function markVoidedInSheet(code: string): Promise<void> {
   try {
     if (!sheetEnabled()) return;

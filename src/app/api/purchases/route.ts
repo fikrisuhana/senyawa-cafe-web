@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   let notaFile: { name: string; type: string; buf: Buffer } | null = null;
   if (ct.includes("multipart/form-data")) {
     const fd = await req.formData();
-    for (const k of ["itemName", "qty", "unitPrice", "unit", "note", "category", "restockPackagingId", "restockQty", "restockMode"]) {
+    for (const k of ["itemName", "qty", "unitPrice", "unit", "note", "category", "restockPackagingId", "restockQty", "restockMode", "notaName", "reuseNotaUrl", "reuseNotaName"]) {
       const v = fd.get(k);
       if (v != null) b[k] = v;
     }
@@ -48,19 +48,25 @@ export async function POST(req: Request) {
   if (!itemName) return NextResponse.json({ error: "Nama/deskripsi wajib" }, { status: 400 });
   if (unitPrice <= 0) return NextResponse.json({ error: "Nominal harus > 0" }, { status: 400 });
 
-  // Upload nota ke Drive SEBELUM create — kalau gagal tetap simpan catatan (nota opsional).
+  // Nota: (a) upload file baru, ATAU (b) PAKAI ULANG nota terakhir (mis. 1 struk
+  // buat beberapa bahan → gak upload dobel). Upload gagal → catatan tetap tersimpan.
   let notaUrl: string | null = null;
   let notaName: string | null = null;
   let notaWarning = "";
   if (notaFile) {
     try {
-      const up = await uploadNotaToDrive(notaFile.name, notaFile.type, notaFile.buf);
+      const customName = b.notaName ? String(b.notaName) : undefined;
+      const up = await uploadNotaToDrive(notaFile.name, notaFile.type, notaFile.buf, customName);
       notaUrl = up.url;
       notaName = up.name;
     } catch (e) {
       console.error("Upload nota gagal:", (e as Error).message);
       notaWarning = " Catatan tersimpan TAPI upload nota gagal (cek Drive API / service account).";
     }
+  } else if (b.reuseNotaUrl) {
+    // Pakai ulang nota yang sudah di-upload sebelumnya (tanpa upload lagi).
+    notaUrl = String(b.reuseNotaUrl).slice(0, 500);
+    notaName = b.reuseNotaName ? String(b.reuseNotaName).slice(0, 150) : "nota";
   }
 
   const settings = await getSettings();
@@ -132,7 +138,7 @@ export async function POST(req: Request) {
   }
 
   void syncOpsToSheet(); // mirror ke Google Sheet (tab Belanja + Restok_Log + Rekap_Harian)
-  return NextResponse.json({ ok: true, id: p.id, total, notaUrl, notaWarning });
+  return NextResponse.json({ ok: true, id: p.id, total, notaUrl, notaName, notaWarning });
 }
 
 // Edit catatan belanja: nama / qty / harga / unit / keterangan / kategori.

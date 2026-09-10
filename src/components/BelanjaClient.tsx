@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import EditPurchase from "@/components/EditPurchase";
 import { useRouter } from "next/navigation";
 import { rupiah } from "@/lib/format";
@@ -30,6 +30,9 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
   const [unitPrice, setUnitPrice] = useState("");
   const [note, setNote] = useState("");
   const [nota, setNota] = useState<File | null>(null);
+  const [notaName, setNotaName] = useState(""); // nama nota (opsional)
+  const [reuseLast, setReuseLast] = useState(false); // pakai nota terakhir (gak upload ulang)
+  const [lastNota, setLastNota] = useState<{ url: string; name: string } | null>(null);
   const [cat, setCat] = useState("BELANJA");
   const [bahanId, setBahanId] = useState("");
   const [bahanQty, setBahanQty] = useState("");
@@ -39,6 +42,16 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
   const [nbBuyFactor, setNbBuyFactor] = useState("1");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Ingat nota terakhir yang di-upload (per browser) → bisa dipakai ulang.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("lastNota");
+      if (raw) setLastNota(JSON.parse(raw));
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const q = Math.max(1, Math.round(Number(qty) || 0));
   const harga = Math.max(0, Math.round(Number(unitPrice) || 0));
@@ -63,6 +76,10 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
             }
           : { restockPackagingId: bahanId, restockQty: String(Number(bahanQty)), restockMode: bahanMode || "buy" }
         : {}),
+      // Nama nota (kalau upload file baru).
+      ...(nota && notaName.trim() ? { notaName: notaName.trim() } : {}),
+      // Pakai ulang nota terakhir (tanpa upload) — mis. 1 struk buat banyak bahan.
+      ...(!nota && reuseLast && lastNota ? { reuseNotaUrl: lastNota.url, reuseNotaName: lastNota.name } : {}),
     };
     let res: Response;
     if (nota) {
@@ -89,6 +106,14 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
     setUnitPrice("");
     setNote("");
     setNota(null);
+    // Nota baru berhasil di-upload → ingat sbg "nota terakhir" buat dipakai ulang.
+    if (body.notaUrl) {
+      const ln = { url: String(body.notaUrl), name: String(body.notaName || notaName || "nota") };
+      setLastNota(ln);
+      try { localStorage.setItem("lastNota", JSON.stringify(ln)); } catch { /* ignore */ }
+    }
+    setNotaName("");
+    setReuseLast(false);
     setMsg(`✅ Tercatat — ${rupiah(body.total)} (biaya owner, bukan dari laci)${bahanId && Number(bahanQty) > 0 ? " + stok bahan bertambah" : ""}${body.notaWarning || ""}`);
     setBahanId("");
     setBahanQty("");
@@ -169,25 +194,45 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
           onChange={(e) => setNote(e.target.value)}
         />
 
-        <label className="sm:col-span-7 flex flex-wrap items-center gap-2 cursor-pointer rounded-lg border border-dashed border-slate-300 bg-slate-50/60 p-2.5 text-xs text-slate-500 hover:border-blue-400 hover:text-blue-700 transition">
-          <span className="font-semibold">🧾 Foto nota (opsional)</span>
-          <span className="truncate max-w-[16rem] text-slate-700 font-medium">{nota ? nota.name : "JPG/PNG/PDF maks 8MB — disimpan di Google Drive"}</span>
+        <div className="sm:col-span-7 space-y-2">
+          <label className="flex flex-wrap items-center gap-2 cursor-pointer rounded-lg border border-dashed border-slate-300 bg-slate-50/60 p-2.5 text-xs text-slate-500 hover:border-blue-400 hover:text-blue-700 transition">
+            <span className="font-semibold">🧾 Foto nota (opsional)</span>
+            <span className="truncate max-w-[16rem] text-slate-700 font-medium">{nota ? nota.name : "Ketuk buat FOTO/pilih — JPG/PNG/PDF maks 8MB → Google Drive"}</span>
+            {nota && (
+              <button
+                type="button"
+                className="text-red-500 font-bold hover:underline"
+                onClick={(e) => { e.preventDefault(); setNota(null); }}
+              >
+                buang
+              </button>
+            )}
+            {/* capture=environment → di HP langsung buka kamera belakang. */}
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => { setNota(e.target.files?.[0] || null); setReuseLast(false); }}
+            />
+          </label>
+
           {nota && (
-            <button
-              type="button"
-              className="text-red-500 font-bold hover:underline"
-              onClick={(e) => { e.preventDefault(); setNota(null); }}
-            >
-              buang
-            </button>
+            <input
+              value={notaName}
+              onChange={(e) => setNotaName(e.target.value)}
+              placeholder="Nama nota (opsional) — mis. Belanja Sayur 1 Sep"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-blue-400 focus:outline-none"
+            />
           )}
-          <input
-            type="file"
-            accept="image/*,application/pdf"
-            className="hidden"
-            onChange={(e) => setNota(e.target.files?.[0] || null)}
-          />
-        </label>
+
+          {!nota && lastNota && (
+            <label className="flex items-center gap-2 rounded-lg bg-amber-50/60 border border-amber-100 p-2 text-xs text-slate-600 cursor-pointer">
+              <input type="checkbox" checked={reuseLast} onChange={(e) => setReuseLast(e.target.checked)} />
+              <span>🧾 Pakai nota terakhir: <b className="text-slate-800">{lastNota.name}</b> <span className="text-slate-400">(1 struk buat banyak bahan — gak upload dobel)</span></span>
+            </label>
+          )}
+        </div>
 
         {cat === "BELANJA" && bahans.length > 0 && (
           <div className="sm:col-span-7 flex flex-wrap items-center gap-2 rounded-xl bg-blue-50/50 border border-blue-100 p-3 text-xs">

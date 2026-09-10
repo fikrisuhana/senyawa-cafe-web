@@ -77,42 +77,63 @@ async function _sheetIdByTitle(id: string, sheets: any, title: string): Promise<
  * Google melarang SA menyimpan file); (2) service account (hanya Workspace /
  * shared drive). Target folder = Setting 'drive_folder_id' (atur dari web).
  */
+/** Cari folder bernama `name` di dalam `parentId`, buat kalau belum ada. */
+async function ensureDriveFolder(drive: any, parentId: string, name: string): Promise<string> {
+  const safe = name.replace(/'/g, "\\'");
+  const q = `'${parentId}' in parents and name='${safe}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const list = await drive.files.list({ q, fields: "files(id)", pageSize: 1 });
+  const found = list.data.files?.[0]?.id;
+  if (found) return found;
+  const created = await drive.files.create({
+    requestBody: { name, mimeType: "application/vnd.google-apps.folder", parents: [parentId] },
+    fields: "id",
+  });
+  return created.data.id as string;
+}
+
 export async function uploadNotaToDrive(
   fileName: string,
   mimeType: string,
   buf: Buffer,
-): Promise<{ url: string; name: string }> {
-  const name = `nota-${Date.now()}-${fileName}`.slice(0, 150);
+  customName?: string,
+): Promise<{ url: string; name: string; id: string }> {
   const media = { mimeType, body: Readable.from(buf) };
-  const folderId = await currentDriveFolderId();
+  const rootId = await currentDriveFolderId();
 
+  // OAuth (owner) diutamakan; fallback service account.
   const oauth = await driveOAuthClient();
-  if (oauth) {
-    const drive = google.drive({ version: "v3", auth: oauth });
-    const f = await drive.files.create({
-      requestBody: { name, ...(folderId ? { parents: [folderId] } : {}) },
-      media,
-      fields: "id,name,webViewLink",
-    });
-    if (!f.data.webViewLink) throw new Error("Upload Drive gagal");
-    return { url: f.data.webViewLink, name: f.data.name || fileName };
-  }
-
-  const auth = jwt();
+  const auth = oauth ?? jwt();
   if (!auth) throw new Error("Google belum dikonfigurasi di server");
-  if (!folderId) {
+  if (!rootId && !oauth) {
     throw new Error(
-      "Upload nota belum siap — hubungkan akun Google Drive & set folder nota di Admin → Pengaturan",
+      "Upload nota belum siap — hubungkan Google Drive & set folder di Admin → Pengaturan",
     );
   }
   const drive = google.drive({ version: "v3", auth });
+
+  // Struktur rapi: <Folder Utama>/Nota/<YYYY-MM>/<DD>/ (auto dibuat).
+  let parent: string | undefined = rootId || undefined;
+  if (parent) {
+    const now = new Date();
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const dd = String(now.getDate()).padStart(2, "0");
+    const notaId = await ensureDriveFolder(drive, parent, "Nota");
+    const monthId = await ensureDriveFolder(drive, notaId, ym);
+    parent = await ensureDriveFolder(drive, monthId, dd);
+  }
+
+  // Nama file = nama custom dari user (kalau ada), else timestamp+nama asli.
+  const name = (customName && customName.trim())
+    ? customName.trim().slice(0, 120)
+    : `nota-${Date.now()}-${fileName}`.slice(0, 150);
+
   const f = await drive.files.create({
-    requestBody: { name, parents: [folderId] },
+    requestBody: { name, ...(parent ? { parents: [parent] } : {}) },
     media,
     fields: "id,name,webViewLink",
   });
   if (!f.data.id || !f.data.webViewLink) throw new Error("Upload Drive gagal");
-  return { url: f.data.webViewLink, name: f.data.name || fileName };
+  return { url: f.data.webViewLink, name: f.data.name || name, id: f.data.id };
 }
 
 /**

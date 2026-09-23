@@ -1,4 +1,5 @@
 import { prisma } from "./db";
+import { PAYMENT_METHOD_OPTIONS } from "./payments";
 
 export type Settings = {
   storeName: string;
@@ -14,6 +15,9 @@ export type Settings = {
   shifts: string; // csv nama shift, mis. "Pagi,Malam"
   shiftHours: string; // csv jam per shift sejajar `shifts`, mis. "9-17,17-24"
   kasAwal: number; // modal kas awal harian (mis. 250000)
+  // Metode bayar yang MUNCUL di kasir (csv): TUNAI,QRIS,TRANSFER,SPLIT. Admin bisa
+  // matikan sementara (mis. QRIS gangguan → hapus QRIS). HP ikut saat sinkron.
+  paymentMethods: string;
 };
 
 const DEFAULTS: Settings = {
@@ -30,6 +34,7 @@ const DEFAULTS: Settings = {
   shifts: "Pagi,Malam",
   shiftHours: "8-16,16-24",
   kasAwal: 250000,
+  paymentMethods: "TUNAI,QRIS,TRANSFER,SPLIT",
 };
 
 export async function getSettings(): Promise<Settings> {
@@ -49,7 +54,14 @@ export async function getSettings(): Promise<Settings> {
     shifts: map.shifts ?? DEFAULTS.shifts,
     shiftHours: map.shiftHours ?? DEFAULTS.shiftHours,
     kasAwal: numOr(map.kasAwal, DEFAULTS.kasAwal),
+    paymentMethods: map.paymentMethods || DEFAULTS.paymentMethods,
   };
+}
+
+/** "TUNAI,QRIS,SPLIT" → ["TUNAI","QRIS","SPLIT"] (cuma opsi yang dikenal, urut baku). */
+export function parsePaymentMethods(csv: string): string[] {
+  const set = new Set(csv.split(",").map((s) => s.trim().toUpperCase()));
+  return PAYMENT_METHOD_OPTIONS.filter((m) => set.has(m));
 }
 
 /** Parse "Sore,Malam" → ["Sore","Malam"]. */

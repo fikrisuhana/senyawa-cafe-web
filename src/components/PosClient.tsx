@@ -55,17 +55,19 @@ export default function PosClient({
   menus,
   quickCash,
   vouchers,
+  methods = ["TUNAI", "QRIS", "TRANSFER"],
 }: {
   menus: PosMenu[];
   quickCash: QuickCash[];
   vouchers: PosVoucher[];
+  methods?: string[]; // metode aktif dari Pengaturan (admin bisa matikan, mis. QRIS gangguan)
 }) {
   const router = useRouter();
   const [cart, setCart] = useState<Record<string, CartLine>>({});
   const [cat, setCat] = useState<string>("ALL");
   const [q, setQ] = useState("");
   const [paid, setPaid] = useState<string>("");
-  const [payment, setPayment] = useState("TUNAI");
+  const [payment, setPayment] = useState(methods[0] || "TUNAI");
   const [orderType, setOrderType] = useState("DINEIN");
   const [note, setNote] = useState("");
   const [voucherId, setVoucherId] = useState("");
@@ -394,7 +396,7 @@ export default function PosClient({
             { id: "TUNAI", label: "Tunai", icon: Banknote },
             { id: "QRIS", label: "QRIS", icon: QrCode },
             { id: "TRANSFER", label: "Transfer", icon: CreditCard },
-          ].map((m) => (
+          ].filter((m) => methods.includes(m.id)).map((m) => (
             <button
               key={m.id}
               onClick={() => setPayment(m.id)}

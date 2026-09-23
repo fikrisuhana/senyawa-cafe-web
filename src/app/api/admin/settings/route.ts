@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { setSettings } from "@/lib/settings";
+import { setSettings, parsePaymentMethods } from "@/lib/settings";
 
 const ALLOWED = [
   "storeName",
@@ -15,6 +15,7 @@ const ALLOWED = [
   "shifts",
   "shiftHours", // BUG FIX: dulu kelewat → rentang jam shift gak pernah kesimpen
   "kasAwal",
+  "paymentMethods", // metode bayar yang tampil di kasir (WAJIB di sini, lihat bug shiftHours)
 ] as const;
 
 export async function PUT(req: Request) {
@@ -31,6 +32,13 @@ export async function PUT(req: Request) {
         { status: 413 }
       );
     patch[k] = val;
+  }
+  if (patch.paymentMethods !== undefined) {
+    // Minimal 1 metode biasa aktif — SPLIT sendiri gak bisa dipakai bayar.
+    const list = parsePaymentMethods(patch.paymentMethods);
+    if (!list.some((m) => m !== "SPLIT"))
+      return NextResponse.json({ error: "Aktifkan minimal 1 metode bayar (Tunai/QRIS/Transfer)" }, { status: 400 });
+    patch.paymentMethods = list.join(",");
   }
   await setSettings(patch as any);
   return NextResponse.json({ ok: true });

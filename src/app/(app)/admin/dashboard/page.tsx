@@ -4,6 +4,7 @@ import { todayKey, businessDateRange, labelHari } from "@/lib/bizday";
 import { rupiah } from "@/lib/format";
 import { labelBulan, resolvePeriod } from "@/lib/period";
 import { shiftRanges } from "@/lib/shifts";
+import { payParts } from "@/lib/payments";
 import PeriodDropdown from "@/components/PeriodDropdown";
 import ShiftFilter from "@/components/ShiftFilter";
 import Link from "next/link";
@@ -107,7 +108,8 @@ export default async function DashboardPage({
   const perMenu = new Map<string, number>();
   for (const t of statTrx) {
     perHari.set(t.businessDate, (perHari.get(t.businessDate) || 0) + t.total);
-    perMetode.set(t.payment, (perMetode.get(t.payment) || 0) + t.total);
+    // Split payment kebagi ke metodenya masing-masing.
+    for (const part of payParts(t)) perMetode.set(part.method, (perMetode.get(part.method) || 0) + part.amount);
     for (const it of t.items) {
       perKategori.set(it.category || "LAINNYA", (perKategori.get(it.category || "LAINNYA") || 0) + it.subtotal);
       perMenu.set(it.name, (perMenu.get(it.name) || 0) + it.qty);

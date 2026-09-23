@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Settings } from "@/lib/settings";
+import { PAYMENT_METHOD_OPTIONS } from "@/lib/payments";
 import { Sliders, Store, Clock, Receipt, FileSpreadsheet, Upload, Check, AlertCircle, RefreshCw, ExternalLink } from "lucide-react";
 
 const TABS = ["Umum", "Kasir & Absensi", "Struk"] as const;
@@ -22,6 +23,7 @@ export default function PengaturanClient({ settings }: { settings: Settings }) {
     shifts: settings.shifts,
     shiftHours: settings.shiftHours,
     kasAwal: String(settings.kasAwal),
+    paymentMethods: settings.paymentMethods,
     paperWidth: String(settings.paperWidth),
     receiptHeader: settings.receiptHeader,
     receiptFooter: settings.receiptFooter,
@@ -63,9 +65,17 @@ export default function PengaturanClient({ settings }: { settings: Settings }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(f),
     });
+    const j = await res.json().catch(() => ({}));
     setBusy(false);
-    setMsg(res.ok ? "✅ Pengaturan berhasil disimpan" : "❌ Gagal menyimpan pengaturan");
+    setMsg(res.ok ? "✅ Pengaturan berhasil disimpan" : `❌ ${j.error || "Gagal menyimpan pengaturan"}`);
     router.refresh();
+  }
+
+  // Metode bayar aktif (csv) → centang/lepas satu metode.
+  const activeMethods = f.paymentMethods.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+  function toggleMethod(m: string) {
+    const next = activeMethods.includes(m) ? activeMethods.filter((x) => x !== m) : [...activeMethods, m];
+    set("paymentMethods", PAYMENT_METHOD_OPTIONS.filter((x) => next.includes(x)).join(","));
   }
 
   return (
@@ -184,6 +194,34 @@ export default function PengaturanClient({ settings }: { settings: Settings }) {
 
         {tab === "Kasir & Absensi" && (
           <section className="space-y-4">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Metode Bayar Aktif di Kasir</label>
+              <div className="flex flex-wrap gap-2">
+                {PAYMENT_METHOD_OPTIONS.map((m) => {
+                  const on = activeMethods.includes(m);
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => toggleMethod(m)}
+                      className={`px-3 py-2 rounded-lg border font-semibold transition inline-flex items-center gap-1.5 ${
+                        on
+                          ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                          : "bg-slate-50 border-slate-200 text-slate-400 line-through"
+                      }`}
+                    >
+                      {on && <Check className="w-3.5 h-3.5" />}
+                      {m === "SPLIT" ? "SPLIT (Tunai + non-tunai)" : m}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1 text-[11px] text-slate-400">
+                Yang dicoret tidak muncul di layar bayar kasir (mis. QRIS gangguan → matikan QRIS). HP ikut berubah saat sinkron berikutnya.
+                Split butuh Tunai + minimal 1 metode non-tunai aktif.
+              </p>
+            </div>
+
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Tombol Cepat Uang Tunai Kasir</label>
               <input

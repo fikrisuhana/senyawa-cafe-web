@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { getSettings, parseQuickCash } from "@/lib/settings";
+import { getSettings, parseQuickCash, parsePaymentMethods } from "@/lib/settings";
 import { todayKey, businessDateRange, labelHari } from "@/lib/bizday";
 import { rupiah } from "@/lib/format";
 import PosClient, { type PosMenu } from "@/components/PosClient";
@@ -75,6 +75,7 @@ export default async function KasirPage() {
       <PosClient
         menus={menus}
         quickCash={parseQuickCash(settings.quickCash)}
+        methods={parsePaymentMethods(settings.paymentMethods).filter((m) => m !== "SPLIT")}
         vouchers={vouchers.map((v) => ({
           id: v.id,
           name: v.name,

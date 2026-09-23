@@ -5,6 +5,7 @@ import { todayKey } from "@/lib/bizday";
 import { resolvePeriod } from "@/lib/period";
 import { shiftRanges } from "@/lib/shifts";
 import { rupiah, waktu } from "@/lib/format";
+import { SPLIT, cashPortion, payLabel, payParts } from "@/lib/payments";
 import Link from "next/link";
 import PeriodFilter from "@/components/PeriodFilter";
 import ShiftFilter from "@/components/ShiftFilter";
@@ -68,7 +69,8 @@ export default async function RekapPage({
   // Kas & pengeluaran
   const pengeluaran = cashEntries.filter((e) => e.type === "KELUAR").reduce((s, e) => s + e.amount, 0);
   const kasMasuk = cashEntries.filter((e) => e.type === "MASUK").reduce((s, e) => s + e.amount, 0);
-  const penjualanTunai = active.filter((t) => t.payment === "TUNAI").reduce((s, t) => s + t.total, 0);
+  // Porsi TUNAI saja (split: cuma bagian tunainya yang masuk laci).
+  const penjualanTunai = active.reduce((s, t) => s + cashPortion(t), 0);
   const hariAktif = new Set<string>(active.map((t) => t.businessDate));
   cashEntries.forEach((e) => hariAktif.add(e.businessDate));
   const kasAwalTotal =
@@ -87,14 +89,17 @@ export default async function RekapPage({
   const perKasir = new Map<string, { qty: number; total: number }>();
   const perShift = new Map<string, { qty: number; total: number }>();
   for (const t of active) {
-    perMetode.set(t.payment, (perMetode.get(t.payment) || 0) + t.total);
-    let ms = perMetodeShift.get(t.payment);
-    if (!ms) perMetodeShift.set(t.payment, (ms = new Map()));
-    const mKey = t.shift || "(tanpa shift)";
-    const mCur = ms.get(mKey) || { qty: 0, total: 0 };
-    mCur.qty += 1;
-    mCur.total += t.total;
-    ms.set(mKey, mCur);
+    // Split payment: tiap porsi masuk ke metodenya masing-masing.
+    for (const part of payParts(t)) {
+      perMetode.set(part.method, (perMetode.get(part.method) || 0) + part.amount);
+      let ms = perMetodeShift.get(part.method);
+      if (!ms) perMetodeShift.set(part.method, (ms = new Map()));
+      const mKey = t.shift || "(tanpa shift)";
+      const mCur = ms.get(mKey) || { qty: 0, total: 0 };
+      mCur.qty += 1;
+      mCur.total += part.amount;
+      ms.set(mKey, mCur);
+    }
     const sh = perShift.get(t.shift || "(tanpa shift)") || { qty: 0, total: 0 };
     sh.qty += 1;
     sh.total += t.total;
@@ -138,7 +143,7 @@ export default async function RekapPage({
       t.code,
       t.orderType === "TAKEAWAY" ? "Bungkus" : "Ditempat",
       t.cashierName,
-      t.payment,
+      payLabel(t),
       String(t.discount),
       String(t.total),
       t.status === "VOID" ? "BATAL" : "OK",
@@ -435,7 +440,18 @@ export default async function RekapPage({
                       )}
                     </td>
                     <td className="py-3 px-4">
-                      <span className="pill-slate font-medium">{t.payment}</span>
+                      {t.payment === SPLIT ? (
+                        <div className="space-y-0.5">
+                          <span className="pill-amber font-medium">SPLIT</span>
+                          {payParts(t).map((p) => (
+                            <div key={p.method} className="text-[10px] text-slate-500 font-mono whitespace-nowrap">
+                              {p.method} {rupiah(p.amount)}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="pill-slate font-medium">{t.payment}</span>
+                      )}
                     </td>
                     <td className={`py-3 px-4 text-right font-mono font-bold ${isVoid ? "line-through text-slate-400" : "text-slate-900"}`}>
                       {rupiah(t.total)}
@@ -444,7 +460,14 @@ export default async function RekapPage({
                       <div className="inline-flex items-center justify-end gap-1.5">
                         {isAdmin && !isVoid && (
                           <EditTrx
-                            trx={{ id: t.id, code: t.code, cashierName: t.cashierName, payment: t.payment }}
+                            trx={{
+                              id: t.id,
+                              code: t.code,
+                              cashierName: t.cashierName,
+                              payment: t.payment,
+                              total: t.total,
+                              parts: payParts(t),
+                            }}
                             employees={employeeNames}
                           />
                         )}

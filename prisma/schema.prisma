@@ -134,7 +134,8 @@ model Transaction {
   costTotal    Int               @default(0)
   paid         Int
   change       Int               @default(0)
-  payment      String            @default("TUNAI")
+  payment      String            @default("TUNAI") // TUNAI | QRIS | TRANSFER | SPLIT
+  payments     Json? // SPLIT: [{method, amount}] (jumlah = total). null = 1 metode (lihat lib/payments.ts)
   orderType    String            @default("DINEIN") // DINEIN | TAKEAWAY
   note         String?
   customerName String? // nama pelanggan (opsional, diketik kasir)

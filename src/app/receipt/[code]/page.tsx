@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { rupiah, waktu } from "@/lib/format";
+import { SPLIT, payParts } from "@/lib/payments";
 import PrintButton from "@/components/PrintButton";
 
 export const dynamic = "force-dynamic";
@@ -79,8 +80,24 @@ export default async function ReceiptPage({
             </>
           )}
           <Row k="Total" v={rupiah(trx.total)} bold />
-          <Row k={`Bayar (${trx.payment})`} v={rupiah(trx.paid)} />
-          {trx.payment === "TUNAI" && <Row k="Kembali" v={rupiah(trx.change)} />}
+          {trx.payment === SPLIT ? (
+            <>
+              {/* Split: porsi tiap metode; tunai tampil uang diterima (porsi + kembalian). */}
+              {payParts(trx).map((p) => (
+                <Row
+                  key={p.method}
+                  k={`Bayar ${p.method}`}
+                  v={rupiah(p.method === "TUNAI" ? p.amount + trx.change : p.amount)}
+                />
+              ))}
+              {trx.change > 0 && <Row k="Kembali" v={rupiah(trx.change)} />}
+            </>
+          ) : (
+            <>
+              <Row k={`Bayar (${trx.payment})`} v={rupiah(trx.paid)} />
+              {trx.payment === "TUNAI" && <Row k="Kembali" v={rupiah(trx.change)} />}
+            </>
+          )}
         </div>
         {trx.note && <p className="mt-2 text-[11px] text-slate-500">Catatan: {trx.note}</p>}
         {s.receiptFooter && (

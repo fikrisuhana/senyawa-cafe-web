@@ -4,6 +4,7 @@ import { todayKey } from "@/lib/bizday";
 import { resolvePeriod } from "@/lib/period";
 import { shiftRanges } from "@/lib/shifts";
 import { rupiah, waktu } from "@/lib/format";
+import { cashPortion } from "@/lib/payments";
 import PeriodFilter from "@/components/PeriodFilter";
 import ShiftFilter from "@/components/ShiftFilter";
 import CashClient from "@/components/CashClient";
@@ -33,7 +34,7 @@ export default async function KeuanganPage({
   const [txs, entries, purchases, packs] = await Promise.all([
     prisma.transaction.findMany({
       where: { businessDate: bdFilter, status: { not: "VOID" }, ...(shift ? { shift } : {}) },
-      select: { total: true, payment: true, businessDate: true },
+      select: { total: true, payment: true, payments: true, businessDate: true },
     }),
     prisma.cashEntry.findMany({
       where: { businessDate: bdFilter },
@@ -47,7 +48,8 @@ export default async function KeuanganPage({
   ]);
 
   const penjualan = txs.reduce((s, t) => s + t.total, 0);
-  const penjualanTunai = txs.filter((t) => t.payment === "TUNAI").reduce((s, t) => s + t.total, 0);
+  // Porsi tunai saja (split: cuma bagian tunainya yang masuk laci).
+  const penjualanTunai = txs.reduce((s, t) => s + cashPortion(t), 0);
   const manualMasuk = entries.filter((e) => e.type === "MASUK").reduce((s, e) => s + e.amount, 0);
   const keluar = entries.filter((e) => e.type === "KELUAR").reduce((s, e) => s + e.amount, 0);
   const totalMasuk = penjualan + manualMasuk;
@@ -56,7 +58,8 @@ export default async function KeuanganPage({
   // KAS AWAL = SETELAN LACI
   const arusPerHari = new Map<string, number>();
   for (const t of txs) {
-    if (t.payment === "TUNAI") arusPerHari.set(t.businessDate, (arusPerHari.get(t.businessDate) || 0) + t.total);
+    const tunai = cashPortion(t);
+    if (tunai > 0) arusPerHari.set(t.businessDate, (arusPerHari.get(t.businessDate) || 0) + tunai);
   }
   for (const e of entries) {
     const d = arusPerHari.get(e.businessDate) ?? 0;

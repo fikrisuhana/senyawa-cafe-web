@@ -3,6 +3,7 @@ import { Readable } from "stream";
 import { randomBytes } from "crypto";
 import { prisma } from "./db";
 import { shiftRanges } from "./shifts";
+import { payParts, bucketOf, type PayPart } from "./payments";
 
 /**
  * Ekspor otomatis ke Google Sheet pakai SERVICE ACCOUNT (tanpa OAuth interaktif).
@@ -21,7 +22,17 @@ const TX_HEADER = [
   // Kolom M, N ditambah di UJUNG — JANGAN sisip di tengah (rumus dashboard
   // pakai huruf kolom B/F/J/K/L, geser = rusak).
   "no_order", "nama_customer",
+  // O, P, Q = uang per metode (split payment kebagi benar; 1 metode = total
+  // di kolomnya). Rumus Dashboard "Metode Pembayaran" baca kolom ini.
+  "bayar_tunai", "bayar_qris", "bayar_transfer",
 ];
+
+/** Nilai kolom O/P/Q (tunai, qris, transfer) dari rincian bayar. Metode lain → 0 (masuk "Lainnya"). */
+function payCols(parts: PayPart[]): number[] {
+  const c = { tunai: 0, qris: 0, transfer: 0, lain: 0 };
+  for (const p of parts) c[bucketOf(p.method)] += p.amount;
+  return [c.tunai, c.qris, c.transfer];
+}
 
 function creds(): { client_email: string; private_key: string } | null {
   const b64 = process.env.GOOGLE_SA_JSON_B64;
@@ -353,7 +364,8 @@ async function _writeHeaderAndDashboard(id: string) {
   // Dashboard REKAP INTERAKTIF — B4 = DROPDOWN periode (Hari ini / 7 hari /
   // 14 hari / 1 bulan / 2 bulan / Tanggal tertentu). Kalau "Tanggal tertentu",
   // tanggal diisi di B5. Helper H1/H2 = tanggal mulai & akhir periode.
-  // (kolom Transaksi: B hari_usaha, F metode, J total, K modal, L status)
+  // (kolom Transaksi: B hari_usaha, F metode, J total, K modal, L status,
+  //  O/P/Q uang tunai/qris/transfer — split payment kebagi ke kolomnya)
   const isRange = `OR($B$4="7 hari",$B$4="14 hari",$B$4="1 bulan",$B$4="2 bulan")`;
   const minusN = `IFS($B$4="7 hari",6,$B$4="14 hari",13,$B$4="1 bulan",29,$B$4="2 bulan",59,TRUE,0)`;
   const startD = `IF(${isRange},TODAY()-${minusN},IF($B$5="",TODAY(),$B$5))`;
@@ -378,10 +390,10 @@ async function _writeHeaderAndDashboard(id: string) {
     ["Dibatalkan (VOID)", `=COUNTIFS(${inPeriod},Transaksi!L:L,"VOID")`],
     ["", ""],
     ["■ METODE PEMBAYARAN (periode terpilih)", ""],
-    ["  Tunai", `=${sum("J:J", inPeriod, 'Transaksi!F:F,"TUNAI"', aktif)}`],
-    ["  QRIS", `=${sum("J:J", inPeriod, 'Transaksi!F:F,"QRIS"', aktif)}`],
-    ["  Transfer", `=${sum("J:J", inPeriod, 'Transaksi!F:F,"TRANSFER"', aktif)}`],
-    ["  Lainnya", `=${sum("J:J", inPeriod, aktif)}-${sum("J:J", inPeriod, 'Transaksi!F:F,"TUNAI"', aktif)}-${sum("J:J", inPeriod, 'Transaksi!F:F,"QRIS"', aktif)}-${sum("J:J", inPeriod, 'Transaksi!F:F,"TRANSFER"', aktif)}`],
+    ["  Tunai", `=${sum("O:O", inPeriod, aktif)}`],
+    ["  QRIS", `=${sum("P:P", inPeriod, aktif)}`],
+    ["  Transfer", `=${sum("Q:Q", inPeriod, aktif)}`],
+    ["  Lainnya", `=${sum("J:J", inPeriod, aktif)}-${sum("O:O", inPeriod, aktif)}-${sum("P:P", inPeriod, aktif)}-${sum("Q:Q", inPeriod, aktif)}`],
     ["", ""],
     ["■ KAS & ABSENSI (periode terpilih)", ""],
     ["Kas masuk (MASUK)", `=SUMIFS(Kas!F:F,Kas!A:A,">="&DATEVALUE(TEXT($H$1,"yyyy-mm-dd")),Kas!A:A,"<="&DATEVALUE(TEXT($H$2,"yyyy-mm-dd")),Kas!C:C,"MASUK")`],
@@ -702,7 +714,7 @@ export async function syncRekapHarian(): Promise<void> {
 
     const [txs, kas, purchases, ranges] = await Promise.all([
       prisma.transaction.findMany({
-        select: { businessDate: true, payment: true, total: true, discount: true, costTotal: true, status: true, shift: true },
+        select: { businessDate: true, payment: true, payments: true, total: true, discount: true, costTotal: true, status: true, shift: true },
       }),
       prisma.cashEntry.findMany({ select: { businessDate: true, type: true, amount: true } }),
       prisma.purchase.findMany({ select: { businessDate: true, total: true } }),
@@ -744,11 +756,8 @@ export async function syncRekapHarian(): Promise<void> {
         s.omzet += t.total;
         d.perShift.set(t.shift, s);
       }
-      const p = (t.payment || "").toUpperCase();
-      if (p.includes("TUNAI") || p.includes("CASH")) d.tunai += t.total;
-      else if (p.includes("QRIS") || p.includes("QRI")) d.qris += t.total;
-      else if (p.includes("TRANSFER")) d.transfer += t.total;
-      else d.lain += t.total;
+      // Split payment kebagi per porsi (porsi tunai ikut ke est. uang laci).
+      for (const part of payParts(t)) d[bucketOf(part.method)] += part.amount;
     }
     for (const k of kas) {
       const d = day(k.businessDate);
@@ -829,10 +838,10 @@ export async function syncRekapHarian(): Promise<void> {
   }
 }
 
-// Update kolom kasir (D) & metode (F) satu baris transaksi di Sheet (admin edit).
+// Update kolom kasir (D), metode (F) & rincian bayar (O:Q) satu baris transaksi di Sheet (admin edit).
 export async function updateTrxFieldsInSheet(
   code: string,
-  fields: { cashierName?: string; payment?: string }
+  fields: { cashierName?: string; payment?: string; parts?: PayPart[] }
 ): Promise<void> {
   try {
     if (!sheetEnabled()) return;
@@ -849,8 +858,16 @@ export async function updateTrxFieldsInSheet(
     const data: { range: string; values: string[][] }[] = [];
     if (fields.cashierName !== undefined) data.push({ range: `'Transaksi'!D${rowNum}`, values: [[fields.cashierName]] });
     if (fields.payment !== undefined) data.push({ range: `'Transaksi'!F${rowNum}`, values: [[fields.payment]] });
-    if (data.length === 0) return;
-    await sheets.spreadsheets.values.batchUpdate({
+    const rincian: { range: string; values: number[][] }[] = [];
+    if (fields.parts) rincian.push({ range: `'Transaksi'!O${rowNum}:Q${rowNum}`, values: [payCols(fields.parts)] });
+    if (data.length === 0 && rincian.length === 0) return;
+    if (rincian.length) {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: id,
+        requestBody: { valueInputOption: "RAW", data: rincian },
+      });
+    }
+    if (data.length) await sheets.spreadsheets.values.batchUpdate({
       spreadsheetId: id,
       requestBody: { valueInputOption: "RAW", data },
     });
@@ -907,6 +924,7 @@ export async function appendTransactionToSheet(trxId: string): Promise<void> {
           t.orderType, t.payment, t.grossTotal, t.discount, t.voucherName || "",
           t.total, t.costTotal, t.status,
           t.orderCode || "", t.customerName || "", // kolom M, N
+          ...payCols(payParts(t)), // kolom O, P, Q
         ]],
       },
     });
@@ -1091,6 +1109,7 @@ export async function rebuildSheet(): Promise<string | null> {
     t.orderType, t.payment, t.grossTotal, t.discount, t.voucherName || "",
     t.total, t.costTotal, t.status,
     t.orderCode || "", t.customerName || "", // kolom M, N
+    ...payCols(payParts(t)), // kolom O, P, Q
   ]);
 
   await sheets.spreadsheets.values.clear({ spreadsheetId: id, range: "'Transaksi'!A2:Z" });

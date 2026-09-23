@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getAuthFromRequest } from "@/lib/auth";
 import { appendTransactionToSheet, updateTrxFieldsInSheet } from "@/lib/gsheet";
 import { getSettings } from "@/lib/settings";
 import { businessDateKey } from "@/lib/bizday";
 import { shiftRanges, shiftNameForHour } from "@/lib/shifts";
+import { SPLIT, parseSplit, payParts, type PayPart } from "@/lib/payments";
 
 type InItem = { id: string; qty: number; optionIds?: string[]; note?: string };
 
@@ -48,6 +50,9 @@ export async function GET(req: Request) {
       businessDate: t.businessDate,
       shift: t.shift,
       payment: t.payment,
+      payments: t.payments ?? null, // rincian SPLIT (HP ikut update kalau admin koreksi)
+      customerName: t.customerName,
+      orderCode: t.orderCode,
       orderType: t.orderType,
       subtotal: t.grossTotal,
       discount: t.discount,
@@ -79,7 +84,9 @@ export async function POST(req: Request) {
   const items: InItem[] = Array.isArray(body.items) ? body.items : [];
   const paid = Number(body.paid) || 0;
   // Normalisasi ke UPPERCASE biar konsisten (TUNAI/QRIS/TRANSFER) — cocok dgn rumus Sheet.
-  const payment = String(body.payment || "TUNAI").toUpperCase();
+  // SPLIT = 2 metode sekaligus (rincian di body.payments, divalidasi setelah total ketemu).
+  const isSplit = Array.isArray(body.payments) && body.payments.length >= 2;
+  const payment = isSplit ? SPLIT : String(body.payment || "TUNAI").toUpperCase();
   const orderType = body.orderType === "TAKEAWAY" ? "TAKEAWAY" : "DINEIN";
   const note = body.note ? String(body.note) : null;
   const customerName = body.customerName ? String(body.customerName).slice(0, 60) : null;
@@ -193,7 +200,15 @@ export async function POST(req: Request) {
       discount = Math.min(Math.max(0, discount), gross);
       const total = gross - discount;
 
-      if (paid < total) throw new Error("Uang bayar kurang");
+      // Split: jumlah porsi WAJIB = total. Tanpa porsi tunai (mis. QRIS+Transfer)
+      // semua digital & pas → tak ada kembalian. `paid` = total + kembalian tunai.
+      let payments: PayPart[] | null = null;
+      let paidFinal = paid;
+      if (isSplit) {
+        payments = parseSplit(body.payments, total, { cashAbsorbs: true });
+        if (!payments.some((p) => p.method === "TUNAI")) paidFinal = total;
+      }
+      if (paidFinal < total) throw new Error("Uang bayar kurang");
 
       const code = "TRX" + Date.now().toString(36).toUpperCase();
       const trx = await tx.transaction.create({
@@ -209,9 +224,10 @@ export async function POST(req: Request) {
           voucherId: usedVoucherId,
           total,
           costTotal,
-          paid,
-          change: paid - total,
+          paid: paidFinal,
+          change: paidFinal - total,
           payment,
+          payments: payments ?? undefined,
           orderType,
           note,
           customerName,
@@ -266,7 +282,9 @@ export async function POST(req: Request) {
 }
 
 // PUT — ADMIN koreksi transaksi: ganti kasir &/atau metode bayar (mis. kecatat
-// TUNAI padahal QRIS). Metode non-tunai → kembalian di-nol-in (paid = total).
+// TUNAI padahal QRIS), termasuk jadi SPLIT via `payments: [{method, amount}×2]`.
+// Metode non-tunai / split → kembalian di-nol-in (paid = total). HP ikut ter-update
+// saat sinkron berikutnya (restore mengoreksi baris yang sudah tersinkron).
 export async function PUT(req: Request) {
   const user = await getAuthFromRequest(req);
   if (!user) return NextResponse.json({ error: "Belum login" }, { status: 401 });
@@ -279,15 +297,27 @@ export async function PUT(req: Request) {
   const trx = await prisma.transaction.findUnique({ where: { id } });
   if (!trx) return NextResponse.json({ error: "Transaksi tidak ditemukan" }, { status: 404 });
 
-  const data: { cashierName?: string; payment?: string; change?: number; paid?: number } = {};
+  const data: Prisma.TransactionUpdateInput = {};
   if (b.cashierName !== undefined) {
     const c = String(b.cashierName).trim().slice(0, 60);
     if (c) data.cashierName = c;
   }
-  if (b.payment !== undefined) {
+  if (Array.isArray(b.payments) && b.payments.length) {
+    // Koreksi jadi SPLIT (2 metode, jumlah = total). Koreksi admin = catatan
+    // pembukuan → anggap pas (kembalian tunai sudah terjadi di kasir).
+    try {
+      data.payments = parseSplit(b.payments, trx.total);
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    }
+    data.payment = SPLIT;
+    data.change = 0;
+    data.paid = trx.total;
+  } else if (b.payment !== undefined) {
     const pay = String(b.payment).toUpperCase().slice(0, 20);
-    if (pay) {
+    if (pay && pay !== SPLIT) {
       data.payment = pay;
+      data.payments = Prisma.DbNull; // balik ke 1 metode → buang rincian split lama
       // Non-tunai bayar pas → tak ada kembalian.
       if (pay !== "TUNAI") {
         data.change = 0;
@@ -299,7 +329,11 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Tidak ada perubahan" }, { status: 400 });
 
   const upd = await prisma.transaction.update({ where: { id }, data });
-  // Mirror ke Google Sheet (kolom kasir D & metode F).
-  void updateTrxFieldsInSheet(upd.code, { cashierName: data.cashierName, payment: data.payment });
+  // Mirror ke Google Sheet (kasir D, metode F, rincian bayar O/P/Q).
+  void updateTrxFieldsInSheet(upd.code, {
+    cashierName: data.cashierName as string | undefined,
+    payment: data.payment !== undefined ? upd.payment : undefined,
+    parts: data.payment !== undefined ? payParts(upd) : undefined,
+  });
   return NextResponse.json({ ok: true, id: upd.id });
 }

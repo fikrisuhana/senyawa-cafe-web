@@ -57,6 +57,40 @@ npm run dev
 
 ---
 
+## 🚢 Deploy ke Server Produksi
+
+Server live: `mint@172.16.1.5` (folder `~/pos-cafe`, hasil `git clone` repo ini) → publik di
+**https://ruangsenyawa.iprime.web.id**. Container: `pos-cafe-app-1` (port 3080) + `pos-cafe-db-1` (Postgres).
+
+**1. Dari laptop — commit & push ke GitHub:**
+```bash
+git add -A
+git commit -m "pesan perubahan"
+git push origin main
+```
+
+**2. Di server — tarik kode & build ulang** (bisa langsung dari laptop lewat SSH):
+```bash
+ssh mint@172.16.1.5 'cd ~/pos-cafe && git pull --ff-only origin main && docker compose up -d --build'
+```
+Saat container start, `docker-entrypoint.sh` otomatis menjalankan `prisma db push` (skema DB ikut
+terbaru) + seed (aman, tidak menimpa data). Kalau build gagal, container lama tetap jalan.
+
+**Opsional — backup DB dulu** (disarankan kalau ada perubahan skema / data penting):
+```bash
+ssh mint@172.16.1.5 'mkdir -p ~/pos-cafe-backups && docker exec pos-cafe-db-1 pg_dump -U poscafe poscafe | gzip > ~/pos-cafe-backups/backup-$(date +%Y%m%d-%H%M).sql.gz'
+```
+
+**Cek log kalau ada masalah:**
+```bash
+ssh mint@172.16.1.5 'docker logs --tail 50 pos-cafe-app-1'
+```
+
+> Jangan commit `.env`, `backups/`, atau file dump `*.sql(.gz)` — sudah di `.gitignore`.
+> File `.env` di server (JWT_SECRET, Google SA, dll.) jangan diubah/ditimpa.
+
+---
+
 ## ⏱️ Konsep "Hari Usaha" & Timezone
 - **Zona Waktu**: Server berjalan pada `TZ=Asia/Jakarta` (WIB GMT+7).
 - **Day Cutoff**: Transaksi sebelum jam `dayCutoffHour` (default 6 pagi) dihitung masuk ke hari usaha sebelumnya.

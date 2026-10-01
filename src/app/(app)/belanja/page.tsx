@@ -65,40 +65,6 @@ export default async function BelanjaPage() {
         }))}
         staffMode={isStaff}
       />
-
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden text-xs">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-            <Package className="w-4 h-4 text-slate-400" /> Stok Bahan Saat Ini
-          </h3>
-          {low.length > 0 && (
-            <span className="pill-red text-[10px] inline-flex items-center gap-1">
-              <AlertTriangle className="w-3 h-3" /> {low.length} menipis
-            </span>
-          )}
-        </div>
-        <div className="divide-y divide-slate-100">
-          {/* Yang menipis ditaruh paling atas biar langsung kelihatan mau beli apa. */}
-          {[...low, ...packs.filter((p) => p.stock > p.minStock)].map((p) => {
-            const isLow = p.stock <= p.minStock;
-            return (
-              <div key={p.id} className={`flex items-center justify-between px-4 py-2.5 ${isLow ? "bg-rose-50/50" : ""}`}>
-                <span className={`font-semibold ${isLow ? "text-rose-700" : "text-slate-800"}`}>
-                  {isLow && "⚠️ "}
-                  {p.name}
-                </span>
-                <span className="text-right">
-                  <span className={`font-mono font-bold ${isLow ? "text-rose-700" : "text-slate-700"}`}>{fmtStock(p)}</span>
-                  {p.minStock > 0 && (
-                    <span className="block text-[10px] text-slate-400">min {p.minStock.toLocaleString("id-ID")} {p.unit}</span>
-                  )}
-                </span>
-              </div>
-            );
-          })}
-          {packs.length === 0 && <p className="p-6 text-center text-slate-400">Belum ada bahan stok.</p>}
-        </div>
-      </div>
     </div>
   );
 }

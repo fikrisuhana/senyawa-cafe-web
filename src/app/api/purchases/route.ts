@@ -133,6 +133,7 @@ export async function POST(req: Request) {
             before: pack.stock,
             after,
             note: `Belanja: ${itemName}`,
+            transactionId: p.id,
             userName: user.name,
           },
         }),
@@ -209,6 +210,31 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Hanya bisa menghapus catatan belanja milik sendiri" }, { status: 403 });
   }
 
+  // 1. Cari mutasi penambahan stok terkait belanja ini
+  const move = await prisma.stockMovement.findFirst({
+    where: {
+      OR: [
+        { transactionId: id },
+        { note: `Belanja: ${existing.itemName}`, type: "RESTOCK" },
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // 2. Jika ada mutasi stok terkait, kurangi kembali stok fisik bahan & hapus log mutasi barang
+  if (move && move.delta > 0) {
+    const pack = await prisma.packaging.findUnique({ where: { id: move.packagingId } });
+    if (pack) {
+      const rollbackStock = Math.max(0, pack.stock - move.delta);
+      await prisma.packaging.update({
+        where: { id: pack.id },
+        data: { stock: rollbackStock },
+      });
+    }
+    await prisma.stockMovement.delete({ where: { id: move.id } });
+  }
+
+  // 3. Hapus catatan belanja
   await prisma.purchase.delete({ where: { id } });
   void syncOpsToSheet();
   return NextResponse.json({ ok: true });

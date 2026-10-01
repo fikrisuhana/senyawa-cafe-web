@@ -12,3 +12,6 @@ backups/
 
 # TS build cache
 *.tsbuildinfo
+
+# graphify (peta kode lokal)
+graphify-out/

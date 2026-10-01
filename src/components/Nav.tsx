@@ -47,6 +47,7 @@ const adminMain: LinkItem[] = [
 const adminManage: LinkItem[] = [
   { href: "/admin/menu", label: "Menu", icon: Utensils },
   { href: "/admin/stok", label: "Stok & Bahan", icon: Package },
+  { href: "/belanja", label: "Belanja & Biaya", icon: ShoppingBag },
   { href: "/admin/keuangan", label: "Keuangan", icon: Wallet },
   { href: "/admin/absensi", label: "Absensi", icon: CalendarCheck },
   { href: "/admin/voucher", label: "Voucher", icon: Ticket },

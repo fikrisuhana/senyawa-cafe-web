@@ -191,3 +191,26 @@ export async function PUT(req: Request) {
   void syncOpsToSheet();
   return NextResponse.json({ ok: true, id: p.id, total: p.total });
 }
+
+// Hapus catatan belanja: hanya admin atau user pemilik catatan
+export async function DELETE(req: Request) {
+  const user = await getAuthFromRequest(req);
+  if (!user) return NextResponse.json({ error: "Belum login" }, { status: 401 });
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id wajib" }, { status: 400 });
+
+  const existing = await prisma.purchase.findUnique({ where: { id } });
+  if (!existing) return NextResponse.json({ error: "Catatan tidak ditemukan" }, { status: 404 });
+
+  // Selain admin, cuma pemilik catatan (KASIR akun HP bersama juga gak boleh hapus punya orang).
+  // CATATAN: stok yang dulu ikut ditambah TIDAK dikurangi (movement gak tertaut ke purchase).
+  if (user.role !== "ADMIN" && existing.userName !== user.name) {
+    return NextResponse.json({ error: "Hanya bisa menghapus catatan belanja milik sendiri" }, { status: 403 });
+  }
+
+  await prisma.purchase.delete({ where: { id } });
+  void syncOpsToSheet();
+  return NextResponse.json({ ok: true });
+}
+

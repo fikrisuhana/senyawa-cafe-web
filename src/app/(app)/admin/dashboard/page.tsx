@@ -240,48 +240,87 @@ export default async function DashboardPage({
         </div>
       </div>
 
-      {/* Side-by-Side: Stok Menipis & Menu Terlaris */}
+      {/* Side-by-Side: Mini Dashboard Stok & Belanja vs Menu Terlaris */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Stok Menipis Card */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+        {/* Mini Dashboard Stok & Belanja Bahan Card */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div className="flex items-center space-x-2.5">
-              <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-xs">
-                <AlertTriangle className="w-4 h-4" />
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
+                lowStock.length > 0 ? "bg-rose-50 text-rose-600" : "bg-blue-50 text-blue-600"
+              }`}>
+                <Package className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="font-bold text-slate-900 text-sm">Peringatan Stok & Bahan</h3>
-                <p className="text-[11px] text-slate-400">Bahan atau kemasan yang berada di bawah batas minimum</p>
+                <h3 className="font-bold text-slate-900 text-sm">Mini Dashboard Stok &amp; Belanja</h3>
+                <p className="text-[11px] text-slate-400">Ringkasan inventori persediaan &amp; belanja bahan periode ini</p>
               </div>
             </div>
-            <Link
-              href="/admin/stok"
-              className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1"
-            >
-              <span>Kelola Stok</span>
-              <span>→</span>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/belanja"
+                className="text-xs text-blue-600 hover:text-blue-700 font-bold bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition"
+              >
+                + Belanja
+              </Link>
+              <Link
+                href="/admin/stok"
+                className="text-xs text-slate-600 hover:text-slate-900 font-semibold flex items-center gap-0.5"
+              >
+                <span>Kelola</span>
+                <span>→</span>
+              </Link>
+            </div>
           </div>
 
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-2 gap-2.5 text-xs">
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Belanja Bahan</span>
+              <span className="font-mono font-bold text-base text-slate-900 mt-0.5 block">{rupiah(biayaBelanja)}</span>
+              <span className="text-[10px] text-slate-500">Periode: {period.label}</span>
+            </div>
+            <div className={`p-3 rounded-xl border ${
+              lowStock.length > 0 ? "bg-rose-50/50 border-rose-200" : "bg-emerald-50/50 border-emerald-200"
+            }`}>
+              <span className="text-[10px] font-bold uppercase tracking-wider block text-slate-500">Kondisi Persediaan</span>
+              <span className={`font-mono font-bold text-base mt-0.5 block ${
+                lowStock.length > 0 ? "text-rose-600" : "text-emerald-700"
+              }`}>
+                {lowStock.length > 0 ? `${lowStock.length} Menipis` : "Aman (0 Menipis)"}
+              </span>
+              <span className="text-[10px] text-slate-500">Dari total {packs.length} jenis bahan</span>
+            </div>
+          </div>
+
+          {/* Items running low */}
           <div className="space-y-2">
             {lowStock.map((p) => (
               <div
                 key={p.id}
-                className="flex items-center justify-between p-2.5 rounded-lg bg-rose-50/50 border border-rose-100 text-xs"
+                className="flex items-center justify-between p-2.5 rounded-xl bg-rose-50/40 border border-rose-100 text-xs"
               >
                 <div className="flex items-center space-x-2">
                   <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                  <span className="font-semibold text-slate-800">{p.name}</span>
+                  <span className="font-bold text-slate-800">{p.name}</span>
                 </div>
-                <span className="pill-red font-mono">
-                  Sisa {p.stock} {p.unit} (Min {p.minStock})
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="pill-red font-mono text-[11px]">
+                    Sisa {p.stock} {p.unit}
+                  </span>
+                  <Link
+                    href="/belanja"
+                    className="text-[10px] font-bold text-blue-600 hover:underline"
+                  >
+                    Beli
+                  </Link>
+                </div>
               </div>
             ))}
             {lowStock.length === 0 && (
-              <div className="py-6 text-center text-xs text-slate-400 flex flex-col items-center justify-center space-y-1">
+              <div className="py-4 text-center text-xs text-slate-400 flex flex-col items-center justify-center space-y-1">
                 <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                <span className="font-medium text-slate-600">Semua stok bahan dan kemasan aman</span>
+                <span className="font-semibold text-slate-700">Semua persediaan bahan &amp; kemasan aman</span>
               </div>
             )}
           </div>

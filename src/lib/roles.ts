@@ -28,7 +28,7 @@ export function homeFor(role: string): string {
  */
 export const BELANJA_PAGES = ["/belanja", "/absen"];
 export const BELANJA_APIS: { path: string; methods: string[] }[] = [
-  { path: "/api/purchases", methods: ["POST", "PUT"] },
+  { path: "/api/purchases", methods: ["POST", "PUT", "DELETE"] },
   { path: "/api/attendance", methods: ["POST"] },
 ];
 

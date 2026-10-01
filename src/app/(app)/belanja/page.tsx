@@ -54,7 +54,15 @@ export default async function BelanjaPage() {
 
       <BelanjaClient
         rows={rows}
-        bahans={packs.map((p) => ({ id: p.id, name: p.name, unit: p.unit, buyUnit: p.buyUnit, buyFactor: p.buyFactor }))}
+        bahans={packs.map((p) => ({
+          id: p.id,
+          name: p.name,
+          unit: p.unit,
+          buyUnit: p.buyUnit,
+          buyFactor: p.buyFactor,
+          stock: p.stock,
+          minStock: p.minStock,
+        }))}
         staffMode={isStaff}
       />
 

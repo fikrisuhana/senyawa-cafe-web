@@ -5,11 +5,14 @@ const COOKIE = "poscafe_session";
 const secret = () =>
   new TextEncoder().encode(process.env.JWT_SECRET || "dev-secret-ubah-di-produksi");
 
+export type { Role } from "./roles";
+import type { Role } from "./roles";
+
 export type SessionUser = {
   id: string;
   username: string;
   name: string;
-  role: "ADMIN" | "KASIR";
+  role: Role;
 };
 
 /** Buat token JWT (dipakai cookie web MAUPUN Bearer token aplikasi HP). */
@@ -52,7 +55,7 @@ export async function getSession(): Promise<SessionUser | null> {
       id: payload.id as string,
       username: payload.username as string,
       name: payload.name as string,
-      role: payload.role as "ADMIN" | "KASIR",
+      role: payload.role as Role,
     };
   } catch {
     return null;
@@ -67,7 +70,7 @@ export async function verifyToken(token: string): Promise<SessionUser | null> {
       id: payload.id as string,
       username: payload.username as string,
       name: payload.name as string,
-      role: payload.role as "ADMIN" | "KASIR",
+      role: payload.role as Role,
     };
   } catch {
     return null;

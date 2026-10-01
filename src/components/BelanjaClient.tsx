@@ -22,7 +22,15 @@ export type BelanjaRow = {
 /// Form catat belanja barang owner (per barang) — otomatis jadi kas keluar.
 export type BahanOpt = { id: string; name: string; unit: string; buyUnit: string | null; buyFactor: number };
 
-export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[]; bahans?: BahanOpt[] }) {
+export default function BelanjaClient({
+  rows,
+  bahans = [],
+  staffMode = false,
+}: {
+  rows: BelanjaRow[];
+  bahans?: BahanOpt[];
+  staffMode?: boolean; // akun staf belanja: tanpa kategori Gaji, judul disederhanakan
+}) {
   const router = useRouter();
   const [itemName, setItemName] = useState("");
   const [qty, setQty] = useState("1");
@@ -126,9 +134,15 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
     <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 text-xs">
       <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
         <div>
-          <h3 className="font-bold text-slate-900 text-sm">Biaya Operasional Owner (Belanja Bahan &amp; Gaji)</h3>
+          <h3 className="font-bold text-slate-900 text-sm">
+            {staffMode ? "Catat Belanja" : <>Biaya Operasional Owner (Belanja Bahan &amp; Gaji)</>}
+          </h3>
           <p className="text-[11px] text-slate-400">
-            Sumber dana owner / modal luar — <b>tidak memotong uang di laci kasir</b>.
+            {staffMode ? (
+              <>Isi barang yang dibeli. Centang bahan stok di bawah biar <b>stok langsung bertambah</b>.</>
+            ) : (
+              <>Sumber dana owner / modal luar — <b>tidak memotong uang di laci kasir</b>.</>
+            )}
           </p>
         </div>
         <span className="pill-slate text-[10px]">Total {rows.length} Pencatatan</span>
@@ -141,7 +155,7 @@ export default function BelanjaClient({ rows, bahans = [] }: { rows: BelanjaRow[
           onChange={(e) => setCat(e.target.value)}
         >
           <option value="BELANJA">Belanja Bahan</option>
-          <option value="GAJI">Gaji Karyawan</option>
+          {!staffMode && <option value="GAJI">Gaji Karyawan</option>}
           <option value="LAIN">Lain-lain</option>
         </select>
 

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { getSession } from "@/lib/auth";
 import { getSettings, parseShifts } from "@/lib/settings";
 import { todayKey, labelHari } from "@/lib/bizday";
 import AbsenClient, { type EmpRow } from "@/components/AbsenClient";
@@ -11,8 +12,11 @@ export default async function AbsenPage() {
   const today = todayKey(settings.dayCutoffHour);
   const shifts = parseShifts(settings.shifts);
 
+  // Staf belanja cuma absen DIRI SENDIRI: akun dicocokkan ke karyawan bernama sama.
+  const user = await getSession();
+  const selfOnly = user?.role === "BELANJA";
   const employees = await prisma.employee.findMany({
-    where: { active: true },
+    where: { active: true, ...(selfOnly ? { name: user!.name } : {}) },
     orderBy: { name: "asc" },
   });
   const todayRecs = await prisma.attendance.findMany({ where: { businessDate: today } });
@@ -46,7 +50,14 @@ export default async function AbsenPage() {
 
       {list.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-xs text-slate-500 shadow-sm">
-          Belum ada staf / karyawan terdaftar. Silakan tambahkan data karyawan di menu Admin &gt; Absensi.
+          {selfOnly ? (
+            <>
+              Akun <b>{user!.name}</b> belum terhubung ke data karyawan. Minta admin menyamakan nama
+              karyawan di Admin &gt; Absensi dengan nama akun ini.
+            </>
+          ) : (
+            <>Belum ada staf / karyawan terdaftar. Silakan tambahkan data karyawan di menu Admin &gt; Absensi.</>
+          )}
         </div>
       ) : (
         <AbsenClient list={list} shifts={shifts.length ? shifts : ["Masuk"]} />

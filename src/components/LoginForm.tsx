@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Coffee, Lock, User, AlertCircle } from "lucide-react";
+import { homeFor } from "@/lib/roles";
 
 export default function LoginForm({
   storeName,
@@ -34,7 +35,7 @@ export default function LoginForm({
       setErr(j.error || "Login gagal, periksa username dan password Anda.");
       return;
     }
-    router.push(j.role === "ADMIN" ? "/admin/dashboard" : "/kasir");
+    router.push(homeFor(j.role));
     router.refresh();
   }
 

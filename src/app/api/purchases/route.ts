@@ -45,6 +45,9 @@ export async function POST(req: Request) {
   const qty = Math.max(1, Math.round(Number(b.qty) || 1));
   const unitPrice = Math.round(Number(b.unitPrice) || 0);
   const category = ["BELANJA", "GAJI", "LAIN"].includes(b.category) ? b.category : "BELANJA";
+  // Staf belanja gak boleh nyatet GAJI (urusan owner).
+  if (user.role === "BELANJA" && category === "GAJI")
+    return NextResponse.json({ error: "Akun staf belanja tidak bisa mencatat gaji" }, { status: 403 });
   if (!itemName) return NextResponse.json({ error: "Nama/deskripsi wajib" }, { status: 400 });
   if (unitPrice <= 0) return NextResponse.json({ error: "Nominal harus > 0" }, { status: 400 });
 
@@ -153,6 +156,13 @@ export async function PUT(req: Request) {
 
   const existing = await prisma.purchase.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Catatan tak ditemukan" }, { status: 404 });
+  // Staf belanja cuma boleh koreksi catatannya SENDIRI (salah ketik), dan gak bisa jadiin GAJI.
+  if (user.role === "BELANJA") {
+    if (existing.userName !== user.name)
+      return NextResponse.json({ error: "Hanya bisa mengedit catatan belanja sendiri" }, { status: 403 });
+    if (b.category === "GAJI")
+      return NextResponse.json({ error: "Akun staf belanja tidak bisa mencatat gaji" }, { status: 403 });
+  }
 
   const data: {
     itemName?: string; category?: string; unit?: string | null;

@@ -8,7 +8,7 @@ export type UserRow = {
   id: string;
   username: string;
   name: string;
-  role: "ADMIN" | "KASIR";
+  role: "ADMIN" | "KASIR" | "BELANJA";
   active: boolean;
 };
 
@@ -104,6 +104,7 @@ export default function UsersClient({ rows }: { rows: UserRow[] }) {
             onChange={(e) => setForm({ ...form, role: e.target.value })}
           >
             <option value="KASIR">KASIR (Akses Kasir & Rekap Hari Ini)</option>
+            <option value="BELANJA">STAF BELANJA (Catat Belanja + Stok & Absen Sendiri)</option>
             <option value="ADMIN">ADMIN (Akses Penuh Manajemen)</option>
           </select>
         </div>
@@ -187,9 +188,9 @@ export default function UsersClient({ rows }: { rows: UserRow[] }) {
                   </td>
                   <td className="py-3 px-4">
                     <span
-                      className={u.role === "ADMIN" ? "pill-blue" : "pill-slate"}
+                      className={u.role === "ADMIN" ? "pill-blue" : u.role === "BELANJA" ? "pill-amber" : "pill-slate"}
                     >
-                      {u.role === "ADMIN" ? "🛡️ ADMIN" : "👤 KASIR"}
+                      {u.role === "ADMIN" ? "🛡️ ADMIN" : u.role === "BELANJA" ? "🛒 BELANJA" : "👤 KASIR"}
                     </span>
                   </td>
                   <td className="py-3 px-4">

@@ -18,6 +18,9 @@ export async function POST(req: Request) {
 
   const emp = await prisma.employee.findUnique({ where: { id: employeeId } });
   if (!emp) return NextResponse.json({ error: "Karyawan tidak ditemukan" }, { status: 404 });
+  // Staf belanja cuma boleh absen DIRI SENDIRI (karyawan bernama sama dgn akunnya).
+  if (user.role === "BELANJA" && emp.name !== user.name)
+    return NextResponse.json({ error: "Hanya bisa absen untuk diri sendiri" }, { status: 403 });
 
   const settings = await getSettings();
   // HP boleh kirim hari-usaha sendiri (replay antre offline di hari berikutnya).

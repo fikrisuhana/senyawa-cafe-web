@@ -3,6 +3,8 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 
+const ROLES = ["ADMIN", "KASIR", "BELANJA"];
+
 export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}));
   if (!b.username || !b.name || !b.password)
@@ -12,7 +14,7 @@ export async function POST(req: Request) {
       data: {
         username: String(b.username).trim().toLowerCase(),
         name: String(b.name).trim(),
-        role: b.role === "ADMIN" ? "ADMIN" : "KASIR",
+        role: ROLES.includes(b.role) ? b.role : "KASIR",
         password: await bcrypt.hash(String(b.password), 10),
       },
     });
@@ -30,7 +32,7 @@ export async function PUT(req: Request) {
   if (!b.id) return NextResponse.json({ error: "id wajib" }, { status: 400 });
   const data: any = {};
   if (typeof b.name === "string") data.name = b.name.trim();
-  if (b.role === "ADMIN" || b.role === "KASIR") data.role = b.role;
+  if (ROLES.includes(b.role)) data.role = b.role;
   if (typeof b.active === "boolean") data.active = b.active;
   if (b.password) data.password = await bcrypt.hash(String(b.password), 10);
   await prisma.user.update({ where: { id: b.id }, data });

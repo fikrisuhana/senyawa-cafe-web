@@ -10,6 +10,7 @@ datasource db {
 enum Role {
   ADMIN
   KASIR
+  BELANJA // staf belanja: cuma catat belanja (+ tambah stok) & absen diri sendiri
 }
 
 model User {

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { SessionUser } from "@/lib/auth";
+import { ROLE_LABEL } from "@/lib/roles";
 import {
   LayoutGrid,
   Receipt,
@@ -19,6 +20,7 @@ import {
   LogOut,
   Coffee,
   RotateCcw,
+  ShoppingBag,
 } from "lucide-react";
 
 type LinkItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
@@ -26,6 +28,12 @@ type LinkItem = { href: string; label: string; icon: React.ComponentType<{ class
 const kasirLinks: LinkItem[] = [
   { href: "/kasir", label: "Kasir", icon: Receipt },
   { href: "/rekap", label: "Rekap", icon: BarChart3 },
+  { href: "/absen", label: "Absen", icon: Clock },
+];
+
+// Staf belanja: cuma catat belanja (+ stok) & absen diri sendiri.
+const belanjaLinks: LinkItem[] = [
+  { href: "/belanja", label: "Belanja", icon: ShoppingBag },
   { href: "/absen", label: "Absen", icon: Clock },
 ];
 
@@ -49,7 +57,7 @@ const adminSystem: LinkItem[] = [
   { href: "/admin/pengaturan", label: "Pengaturan", icon: Settings },
 ];
 
-const allLinks = [...adminMain, ...adminManage, ...adminSystem];
+const allLinks = [...adminMain, ...adminManage, ...adminSystem, ...belanjaLinks];
 
 export default function Nav({
   user,
@@ -67,7 +75,7 @@ export default function Nav({
   const pathname = usePathname();
   const router = useRouter();
   const isAdmin = user.role === "ADMIN";
-  const main = isAdmin ? adminMain : kasirLinks;
+  const main = isAdmin ? adminMain : user.role === "BELANJA" ? belanjaLinks : kasirLinks;
   const [syncingSheet, setSyncingSheet] = useState(false);
 
   const active = (href: string) => pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
@@ -113,7 +121,7 @@ export default function Nav({
           {storeName}
         </span>
         <span className="text-[11px] text-slate-400 font-medium block">
-          {isAdmin ? "POS & Management" : "Kasir Operasional"}
+          {isAdmin ? "POS & Management" : user.role === "BELANJA" ? "Belanja & Stok" : "Kasir Operasional"}
         </span>
       </div>
     </div>
@@ -178,7 +186,7 @@ export default function Nav({
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold text-slate-800 leading-tight">{user.name}</p>
-              <p className="text-[11px] text-slate-400">{user.role === "ADMIN" ? "Administrator" : "Kasir"}</p>
+              <p className="text-[11px] text-slate-400">{ROLE_LABEL[user.role] ?? user.role}</p>
             </div>
           </div>
           <button

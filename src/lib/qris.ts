@@ -2,7 +2,7 @@
  * QRIS dinamis dari QRIS statis (mis. QRIS GoPay Merchant) — versi web, sama
  * persis dengan lib/services/qris.dart di aplikasi HP. Format QRIS = TLV
  * [ID 2][PANJANG 2][NILAI], diakhiri tag 63 = CRC16-CCITT-FALSE.
- * Statis → dinamis: tag 01 "11"→"12", sisipkan tag 54 (nominal), buang 55/56/57.
+ * Bernominal: sisipkan tag 54 (nominal), buang 55/56/57 (lihat qrisWithAmount).
  * Data merchant (tag 26-51) tidak diubah → uang tetap ke merchant yang sama.
  * Modul MURNI (tanpa server import) — aman dipakai komponen client.
  */
@@ -57,12 +57,18 @@ export function qrisMerchantName(raw: string): string {
   }
 }
 
-export function qrisWithAmount(staticPayload: string, amount: number): string {
+/**
+ * QRIS bernominal. Default TETAP bertanda statis (tag 01 "11") — uji nyata 7 Nov
+ * 2026: QR statis+nominal → GoPay Merchant kirim notif "Pembayaran QRIS statis
+ * diterima Rp …" (deteksi otomatis jalan); versi dinamis ("12") uang masuk tapi
+ * tanpa notif. `dynamic: true` → tandai dinamis.
+ */
+export function qrisWithAmount(staticPayload: string, amount: number, opts: { dynamic?: boolean } = {}): string {
   if (!(amount > 0)) throw new Error("Nominal harus > 0");
   const err = validateQris(staticPayload);
   if (err) throw new Error(err);
   const tags = parseQris(staticPayload.trim()).filter((t) => !["54", "55", "56", "57", "63"].includes(t[0]));
-  if (!tags.some((t) => t[0] === "01")) tags.splice(1, 0, ["01", "12"]);
+  if (!tags.some((t) => t[0] === "01")) tags.splice(1, 0, ["01", opts.dynamic ? "12" : "11"]);
   const amt = String(Math.round(amount));
   const tlv = (t: string, v: string) => `${t}${String(v.length).padStart(2, "0")}${v}`;
   let body = "";
@@ -72,7 +78,7 @@ export function qrisWithAmount(staticPayload: string, amount: number): string {
       body += tlv("54", amt);
       written = true;
     }
-    body += tlv(t, t === "01" ? "12" : v);
+    body += tlv(t, t === "01" && opts.dynamic ? "12" : v);
   }
   if (!written) body += tlv("54", amt);
   body += "6304";

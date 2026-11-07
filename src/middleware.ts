@@ -11,6 +11,7 @@ export async function middleware(req: NextRequest) {
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/integrations/") || // dikunci X-Integration-Key di route-nya
     pathname === "/favicon.ico" ||
     pathname === "/icon.svg" ||
     pathname === "/manifest.webmanifest"

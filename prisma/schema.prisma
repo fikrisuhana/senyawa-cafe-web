@@ -247,3 +247,63 @@ model Purchase {
 
   @@index([businessDate])
 }
+
+// ================= DETEKSI PEMBAYARAN GOPAY (cabang Kaligondang) =================
+// Tanpa payment gateway: HP MASTER (login GoPay Merchant) membaca notifikasi &
+// riwayat GoPay lalu melapor ke server; server mencocokkan ke tagihan QR yang
+// menunggu (kasir HP/tablet, kasir web, nanti self-order meja).
+
+// Perangkat (HP/tablet) yang login aplikasi kasir. Admin memilih MASTER di web.
+model Device {
+  id            String   @id @default(cuid())
+  deviceId      String   @unique // UUID dibuat aplikasi (tetap per instalasi)
+  name          String // mis. "Xiaomi 24069PC21G"
+  appVersion    String?
+  userName      String? // akun login terakhir
+  notifAccess   Boolean  @default(false) // izin baca notifikasi (lapis 1)
+  historyAccess Boolean  @default(false) // izin aksesibilitas riwayat GoPay (lapis 2)
+  hasGopay      Boolean  @default(false) // aplikasi GoPay Merchant terpasang
+  isMaster      Boolean  @default(false) // pendeteksi pembayaran (maks 1)
+  enabled       Boolean  @default(true) // dimatikan admin → laporan pembayaran ditolak
+  lastSeenAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+}
+
+// Pembayaran GoPay yang dilaporkan HP master. Satu pembayaran bisa terlihat dari
+// NOTIF (tanpa ref, presisi detik) DAN RIWAYAT (ref unik, presisi menit) →
+// digabung (nominal sama, jam berdekatan) supaya tidak terhitung dobel.
+model GopayPayment {
+  id         String   @id @default(cuid())
+  ref        String?  @unique // kode ref riwayat GoPay, mis. "AJDPID"
+  notifKey   String?  @unique // id notif (anti dobel laporan ulang)
+  amount     Int
+  paidAt     DateTime
+  hasNotif   Boolean  @default(false)
+  hasHistory Boolean  @default(false)
+  title      String?
+  raw        String?
+  deviceId   String?
+  intentId   String?  @unique // tagihan yang dilunasi pembayaran ini
+  createdAt  DateTime @default(now())
+
+  @@index([amount, paidAt])
+}
+
+// Tagihan QRIS yang menunggu dibayar.
+model PaymentIntent {
+  id         String    @id @default(cuid())
+  baseAmount Int // total tagihan asli
+  amount     Int // yang harus dibayar = base + kode unik (kalau bentrok)
+  uniqueCode Int       @default(0)
+  label      String? // nama pelanggan / meja
+  status     String    @default("PENDING") // PENDING | PAID | CANCELLED | EXPIRED
+  source     String    @default("KASIR") // KASIR | WEB | MEJA
+  paidVia    String? // NOTIF | HISTORY | MANUAL
+  createdBy  String?
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  paidAt     DateTime?
+  paymentId  String?
+
+  @@index([status, amount])
+}

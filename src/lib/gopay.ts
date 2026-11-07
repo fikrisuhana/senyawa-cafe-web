@@ -80,10 +80,11 @@ export async function createIntent(opts: { amount: number; label?: string | null
   return { intent, qris };
 }
 
-/** Cocokkan pembayaran yg belum terpakai ke tagihan PENDING (tertua dulu). */
+/** Cocokkan pembayaran yg belum terpakai ke tagihan PENDING (tertua dulu).
+ *  Balik id tagihan yang BARU dilunasi; null kalau tak ada / sudah tercocok sebelumnya. */
 export async function matchPayment(paymentId: string): Promise<string | null> {
   const p = await prisma.gopayPayment.findUnique({ where: { id: paymentId } });
-  if (!p || p.intentId) return p?.intentId ?? null;
+  if (!p || p.intentId) return null;
   // Tagihan harus SUDAH ada saat dibayar. Riwayat presisi menit (jam dibulatkan ke
   // bawah) → toleransi: tagihan boleh dibuat ≤60 dtk setelah jam pembayaran tercatat.
   // Pembayaran nyasar yg jauh sebelum tagihan dibuat tidak ikut tercocok.

@@ -38,8 +38,9 @@ services:
       db:
         condition: service_healthy
     ports:
-      # host:container — ubah 3080 kalau bentrok
-      - "3080:3000"
+      # host:container. Instance lain di server yg sama (mis. cabang Kaligondang):
+      # set APP_BIND/APP_PORT + COMPOSE_PROJECT_NAME di .env biar gak bentrok.
+      - "${APP_BIND:-0.0.0.0}:${APP_PORT:-3080}:3000"
 
 volumes:
   dbdata:

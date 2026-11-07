@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Settings } from "@/lib/settings";
 import { PAYMENT_METHOD_OPTIONS } from "@/lib/payments";
+import { validateQris, qrisMerchantName } from "@/lib/qris";
 import { Sliders, Store, Clock, Receipt, FileSpreadsheet, Upload, Check, AlertCircle, RefreshCw, ExternalLink } from "lucide-react";
 
 const TABS = ["Umum", "Kasir & Absensi", "Struk"] as const;
@@ -24,6 +25,7 @@ export default function PengaturanClient({ settings }: { settings: Settings }) {
     shiftHours: settings.shiftHours,
     kasAwal: String(settings.kasAwal),
     paymentMethods: settings.paymentMethods,
+    qrisStatic: settings.qrisStatic,
     paperWidth: String(settings.paperWidth),
     receiptHeader: settings.receiptHeader,
     receiptFooter: settings.receiptFooter,
@@ -219,6 +221,24 @@ export default function PengaturanClient({ settings }: { settings: Settings }) {
               <p className="mt-1 text-[11px] text-slate-400">
                 Yang dicoret tidak muncul di layar bayar kasir (mis. QRIS gangguan → matikan QRIS). HP ikut berubah saat sinkron berikutnya.
                 Split butuh Tunai + minimal 1 metode non-tunai aktif.
+              </p>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">QRIS Toko (GoPay Merchant)</label>
+              <textarea
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-[11px] text-slate-800 focus:outline-none focus:border-blue-500 font-mono"
+                rows={3}
+                value={f.qrisStatic}
+                onChange={(e) => set("qrisStatic", e.target.value)}
+                placeholder="000201010211…"
+              />
+              <p className="mt-1 text-[11px] text-slate-400">
+                {f.qrisStatic.trim()
+                  ? validateQris(f.qrisStatic)
+                    ? <span className="text-rose-600">⚠️ {validateQris(f.qrisStatic)}</span>
+                    : <span className="text-emerald-700">✅ {qrisMerchantName(f.qrisStatic)} — kasir menampilkan QRIS dengan nominal otomatis.</span>
+                  : "Tempel isi kode QRIS statis toko (scan QR toko pakai pembaca QR, salin teksnya). HP ikut saat sinkron."}
               </p>
             </div>
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { setSettings, parsePaymentMethods } from "@/lib/settings";
+import { validateQris } from "@/lib/qris";
 
 const ALLOWED = [
   "storeName",
@@ -16,6 +17,7 @@ const ALLOWED = [
   "shiftHours", // BUG FIX: dulu kelewat → rentang jam shift gak pernah kesimpen
   "kasAwal",
   "paymentMethods", // metode bayar yang tampil di kasir (WAJIB di sini, lihat bug shiftHours)
+  "qrisStatic", // QRIS statis toko (GoPay Merchant) → QR bernominal di kasir
 ] as const;
 
 export async function PUT(req: Request) {
@@ -39,6 +41,11 @@ export async function PUT(req: Request) {
     if (!list.some((m) => m !== "SPLIT"))
       return NextResponse.json({ error: "Aktifkan minimal 1 metode bayar (Tunai/QRIS/Transfer)" }, { status: 400 });
     patch.paymentMethods = list.join(",");
+  }
+  if (patch.qrisStatic !== undefined) {
+    patch.qrisStatic = patch.qrisStatic.trim();
+    const err = patch.qrisStatic ? validateQris(patch.qrisStatic) : null;
+    if (err) return NextResponse.json({ error: `QRIS tidak valid: ${err}` }, { status: 400 });
   }
   await setSettings(patch as any);
   return NextResponse.json({ ok: true });

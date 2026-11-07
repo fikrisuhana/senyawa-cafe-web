@@ -242,8 +242,10 @@ export async function POST(req: Request) {
       for (const [packagingId, need] of packNeed) {
         const p = await tx.packaging.findUnique({ where: { id: packagingId } });
         if (!p) continue;
-        if (p.stock < need)
-          throw new Error(`Stok ${p.name} tidak cukup (butuh ${need}, ada ${p.stock})`);
+        // Cabang Kaligondang: stok kurang TIDAK menolak transaksi (kasir HP sudah
+        // diperingatkan & memilih lanjut; admin mungkin lupa input stok). Stok
+        // boleh MINUS sebagai tanda harus diinput — kalau ditolak, transaksi HP
+        // nyangkut selamanya di antrean sinkron.
         const after = p.stock - need;
         await tx.packaging.update({ where: { id: p.id }, data: { stock: after } });
         await tx.stockMovement.create({

@@ -18,6 +18,9 @@ export type Settings = {
   // Metode bayar yang MUNCUL di kasir (csv): TUNAI,QRIS,TRANSFER,SPLIT. Admin bisa
   // matikan sementara (mis. QRIS gangguan → hapus QRIS). HP ikut saat sinkron.
   paymentMethods: string;
+  // QRIS STATIS toko (isi QR GoPay Merchant). HP & kasir web menjadikannya QRIS
+  // BERNOMINAL saat bayar. Kosong = fitur QR bernominal mati.
+  qrisStatic: string;
 };
 
 const DEFAULTS: Settings = {
@@ -35,6 +38,7 @@ const DEFAULTS: Settings = {
   shiftHours: "8-16,16-24",
   kasAwal: 250000,
   paymentMethods: "TUNAI,QRIS,TRANSFER,SPLIT",
+  qrisStatic: "",
 };
 
 export async function getSettings(): Promise<Settings> {
@@ -55,6 +59,7 @@ export async function getSettings(): Promise<Settings> {
     shiftHours: map.shiftHours ?? DEFAULTS.shiftHours,
     kasAwal: numOr(map.kasAwal, DEFAULTS.kasAwal),
     paymentMethods: map.paymentMethods || DEFAULTS.paymentMethods,
+    qrisStatic: map.qrisStatic ?? DEFAULTS.qrisStatic,
   };
 }
 

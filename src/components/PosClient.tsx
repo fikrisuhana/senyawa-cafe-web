@@ -18,6 +18,7 @@ import {
   X,
   Layers,
 } from "lucide-react";
+import QrisPayModal from "@/components/QrisPayModal";
 
 export type PosOption = { id: string; name: string; priceDelta: number };
 export type PosGroup = {
@@ -56,12 +57,15 @@ export default function PosClient({
   quickCash,
   vouchers,
   methods = ["TUNAI", "QRIS", "TRANSFER"],
+  qrisEnabled = false,
 }: {
   menus: PosMenu[];
   quickCash: QuickCash[];
   vouchers: PosVoucher[];
   methods?: string[]; // metode aktif dari Pengaturan (admin bisa matikan, mis. QRIS gangguan)
+  qrisEnabled?: boolean; // QRIS toko diatur → bayar QRIS tampil QR bernominal + deteksi otomatis
 }) {
+  const [qrisOpen, setQrisOpen] = useState(false);
   const router = useRouter();
   const [cart, setCart] = useState<Record<string, CartLine>>({});
   const [cat, setCat] = useState<string>("ALL");
@@ -216,6 +220,16 @@ export default function PosClient({
       setErr("Uang bayar kurang dari total transaksi");
       return;
     }
+    // QRIS → tampilkan QR bernominal dulu; transaksi disimpan setelah LUNAS.
+    if (payment === "QRIS" && qrisEnabled) {
+      setErr("");
+      setQrisOpen(true);
+      return;
+    }
+    await submitTransaction();
+  }
+
+  async function submitTransaction() {
     setBusy(true);
     setErr("");
     const res = await fetch("/api/transactions", {
@@ -479,6 +493,17 @@ export default function PosClient({
 
   return (
     <div className="lg:grid lg:gap-6 lg:grid-cols-[1fr_380px]">
+      {qrisOpen && (
+        <QrisPayModal
+          amount={total}
+          label={note || undefined}
+          onClose={() => setQrisOpen(false)}
+          onPaid={() => {
+            setQrisOpen(false);
+            void submitTransaction();
+          }}
+        />
+      )}
       <div className="space-y-4 pb-28 lg:pb-0">
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">

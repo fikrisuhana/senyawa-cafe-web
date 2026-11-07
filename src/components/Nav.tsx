@@ -21,6 +21,7 @@ import {
   Coffee,
   RotateCcw,
   ShoppingBag,
+  Smartphone,
 } from "lucide-react";
 
 type LinkItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
@@ -55,6 +56,7 @@ const adminManage: LinkItem[] = [
 
 const adminSystem: LinkItem[] = [
   { href: "/admin/users", label: "Pengguna", icon: Users },
+  { href: "/admin/perangkat", label: "Perangkat", icon: Smartphone },
   { href: "/admin/pengaturan", label: "Pengaturan", icon: Settings },
 ];
 

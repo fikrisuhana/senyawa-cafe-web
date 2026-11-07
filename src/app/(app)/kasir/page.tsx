@@ -76,6 +76,7 @@ export default async function KasirPage() {
         menus={menus}
         quickCash={parseQuickCash(settings.quickCash)}
         methods={parsePaymentMethods(settings.paymentMethods).filter((m) => m !== "SPLIT")}
+        qrisEnabled={!!settings.qrisStatic}
         vouchers={vouchers.map((v) => ({
           id: v.id,
           name: v.name,

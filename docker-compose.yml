@@ -32,6 +32,8 @@ services:
       GOOGLE_SA_JSON_B64: "${GOOGLE_SA_JSON_B64:-}"
       GSHEET_ID: "${GSHEET_ID:-}"
       OWNER_EMAIL: "${OWNER_EMAIL:-}"
+      # Kunci integrasi aplikasi JADWAL karyawan (kosong = mati). Header X-Integration-Key.
+      INTEGRATION_KEY: "${INTEGRATION_KEY:-}"
       NODE_ENV: production
       TZ: Asia/Jakarta
     depends_on:

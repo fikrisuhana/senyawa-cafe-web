@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Settings } from "@/lib/settings";
 import { PAYMENT_METHOD_OPTIONS } from "@/lib/payments";
 import { validateQris, qrisMerchantName } from "@/lib/qris";
+import { readQrFromImage } from "@/lib/qr-image";
 import { Sliders, Store, Clock, Receipt, FileSpreadsheet, Upload, Check, AlertCircle, RefreshCw, ExternalLink } from "lucide-react";
 
 const TABS = ["Umum", "Kasir & Absensi", "Struk"] as const;
@@ -33,6 +34,26 @@ export default function PengaturanClient({ settings }: { settings: Settings }) {
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const set = (k: string, v: string) => setF({ ...f, [k]: v });
+  const [qrReading, setQrReading] = useState(false);
+  const [qrMsg, setQrMsg] = useState("");
+
+  async function onQrisFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setQrReading(true);
+    setQrMsg("");
+    try {
+      const text = await readQrFromImage(file);
+      if (!text) setQrMsg("QR tidak terbaca. Coba foto lebih dekat/terang, atau screenshot QR-nya saja.");
+      else if (validateQris(text)) setQrMsg(`Ini bukan kode QRIS yang valid (${validateQris(text)}).`);
+      else setF((prev) => ({ ...prev, qrisStatic: text }));
+    } catch {
+      setQrMsg("Gambar tidak bisa dibuka.");
+    } finally {
+      setQrReading(false);
+    }
+  }
 
   function onLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -225,7 +246,13 @@ export default function PengaturanClient({ settings }: { settings: Settings }) {
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">QRIS Toko (GoPay Merchant)</label>
+              <label className="block font-semibold text-slate-700 mb-1">QRIS Toko</label>
+              <label className="inline-flex items-center gap-1.5 mb-2 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold cursor-pointer hover:bg-blue-700">
+                <Upload className="w-3.5 h-3.5" />
+                {qrReading ? "Membaca QR…" : "Upload foto / screenshot QRIS"}
+                <input type="file" accept="image/*" className="hidden" onChange={onQrisFile} disabled={qrReading} />
+              </label>
+              {qrMsg && <p className="mb-1 text-[11px] text-rose-600">⚠️ {qrMsg}</p>}
               <textarea
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-[11px] text-slate-800 focus:outline-none focus:border-blue-500 font-mono"
                 rows={3}
@@ -238,7 +265,12 @@ export default function PengaturanClient({ settings }: { settings: Settings }) {
                   ? validateQris(f.qrisStatic)
                     ? <span className="text-rose-600">⚠️ {validateQris(f.qrisStatic)}</span>
                     : <span className="text-emerald-700">✅ {qrisMerchantName(f.qrisStatic)} — kasir menampilkan QRIS dengan nominal otomatis.</span>
-                  : "Tempel isi kode QRIS statis toko (scan QR toko pakai pembaca QR, salin teksnya). HP ikut saat sinkron."}
+                  : "Upload foto/screenshot QRIS toko dari bank atau dompet digital mana pun (atau tempel teks kodenya). HP ikut saat sinkron."}
+                {f.qrisStatic.trim() && !validateQris(f.qrisStatic) && !/GO-?JEK/i.test(f.qrisStatic) && (
+                  <span className="block text-amber-700">
+                    Bukan QRIS GoPay: lunas otomatis (baca notifikasi GoPay) tidak berlaku, kasir cek pembayaran manual.
+                  </span>
+                )}
               </p>
             </div>
 

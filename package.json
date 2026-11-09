@@ -19,6 +19,7 @@
     "bcryptjs": "^2.4.3",
     "googleapis": "^176.0.0",
     "jose": "^5.9.6",
+    "jsqr": "^1.4.0",
     "lucide-react": "^1.34.0",
     "next": "^15.5.28",
     "qrcode": "^1.5.4",

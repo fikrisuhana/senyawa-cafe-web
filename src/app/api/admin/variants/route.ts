@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { syncCatalogToSheet } from "@/lib/gsheet";
+import { LOCKED_MSG, menuManaged } from "@/lib/menu-sync";
 
 // POST {kind:"group", menuItemId, name, type, required} | {kind:"option", groupId, name, priceDelta}
 export async function POST(req: Request) {
+  if (await menuManaged()) return NextResponse.json({ error: LOCKED_MSG }, { status: 423 });
   const b = await req.json().catch(() => ({}));
   if (b.kind === "group") {
     if (!b.menuItemId || !b.name)
@@ -57,6 +59,7 @@ export async function POST(req: Request) {
 
 // PUT {kind:"optionStock", id, packagingId, qty} — ubah bahan opsi
 export async function PUT(req: Request) {
+  if (await menuManaged()) return NextResponse.json({ error: LOCKED_MSG }, { status: 423 });
   const b = await req.json().catch(() => ({}));
   if (b.kind === "optionStock") {
     if (!b.id) return NextResponse.json({ error: "id wajib" }, { status: 400 });
@@ -79,6 +82,7 @@ export async function PUT(req: Request) {
 
 // DELETE ?kind=group|option|optionStock&id=...
 export async function DELETE(req: Request) {
+  if (await menuManaged()) return NextResponse.json({ error: LOCKED_MSG }, { status: 423 });
   const url = new URL(req.url);
   const kind = url.searchParams.get("kind");
   const id = url.searchParams.get("id");

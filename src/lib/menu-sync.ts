@@ -117,8 +117,11 @@ export function exportItem(m: DbItem): MenuItemIn {
  * Terapkan menu induk ke outlet ini. Yang tak berubah TIDAK disentuh (updatedAt tetap).
  * Menu lokal yang tak ada di kiriman → dinonaktifkan (tidak dihapus).
  */
-export async function applyMenu(items: MenuItemIn[], packagings: PackagingIn[]) {
-  const stats = { created: 0, updated: 0, unchanged: 0, deactivated: 0, packagingCreated: 0 };
+class DryRun extends Error {}
+
+export async function applyMenu(items: MenuItemIn[], packagings: PackagingIn[], opts: { dryRun?: boolean } = {}) {
+  const stats = { created: 0, updated: 0, unchanged: 0, deactivated: 0, packagingCreated: 0, changedNames: [] as string[] };
+  try {
   await prisma.$transaction(
     async (tx) => {
       // 1) Bahan/kemasan yang dipakai resep tapi belum ada di outlet → buat (stok 0).
@@ -175,6 +178,7 @@ export async function applyMenu(items: MenuItemIn[], packagings: PackagingIn[]) 
             },
           });
           stats.created++;
+          stats.changedNames.push(it.name);
           continue;
         }
         const ex = exportItem(cur as DbItem);
@@ -210,6 +214,7 @@ export async function applyMenu(items: MenuItemIn[], packagings: PackagingIn[]) 
           }
         }
         stats.updated++;
+        stats.changedNames.push(it.name);
       }
 
       // 3) Menu lokal yang tak ada di induk → nonaktif (riwayat transaksi aman).
@@ -219,6 +224,8 @@ export async function applyMenu(items: MenuItemIn[], packagings: PackagingIn[]) 
         stats.deactivated = extra.length;
       }
 
+      // Uji coba: hitung saja, semua tulisan di atas dibatalkan (rollback).
+      if (opts.dryRun) throw new DryRun();
       await tx.setting.upsert({
         where: { key: MANAGED_KEY },
         create: { key: MANAGED_KEY, value: "timetable" },
@@ -227,5 +234,8 @@ export async function applyMenu(items: MenuItemIn[], packagings: PackagingIn[]) 
     },
     { timeout: 60_000 },
   );
+  } catch (e) {
+    if (!(e instanceof DryRun)) throw e;
+  }
   return stats;
 }

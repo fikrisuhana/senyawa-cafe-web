@@ -7,7 +7,8 @@ import { MANAGED_KEY, applyMenu, cleanMenu, exportItem, loadMenu, menuManaged, t
 /**
  * Menu INDUK dari aplikasi timetable (X-Integration-Key, sama dgn /api/integrations/jadwal).
  * GET    → menu outlet ini (nama-based) + daftar bahan/kemasan + status kunci.
- * PUT    { items, packagings } → terapkan menu induk; menu di web kasir jadi TERKUNCI.
+ * PUT    { items, packagings, dryRun? } → terapkan menu induk; menu di web kasir jadi TERKUNCI.
+ *        dryRun:true = cuma hitung apa yang bakal berubah (tidak menulis apa pun).
  * DELETE → lepas kunci (menu bisa diedit lagi di web kasir).
  */
 export async function GET(req: Request) {
@@ -41,9 +42,10 @@ export async function PUT(req: Request) {
         buyFactor: Number(p?.buyFactor) || 1,
       }))
     : [];
-  const stats = await applyMenu(items, packagings);
-  if (stats.created || stats.updated || stats.deactivated) void syncCatalogToSheet();
-  return NextResponse.json({ ok: true, ...stats });
+  const dryRun = b?.dryRun === true;
+  const stats = await applyMenu(items, packagings, { dryRun });
+  if (!dryRun && stats.created || stats.updated || stats.deactivated) void syncCatalogToSheet();
+  return NextResponse.json({ ok: true, dryRun, ...stats });
 }
 
 export async function DELETE(req: Request) {

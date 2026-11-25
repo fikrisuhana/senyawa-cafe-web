@@ -3,6 +3,7 @@ import { labelBulan } from "@/lib/period";
 import StokClient, { type PackRow, type MonthlyPurchase, type MoveRow } from "@/components/StokClient";
 import { Boxes, Download, ShoppingBag, Plus } from "lucide-react";
 import Link from "next/link";
+import { bahanManaged } from "@/lib/menu-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -99,8 +100,15 @@ export default async function StokPage({
     },
   }));
 
+  const bahanLocked = await bahanManaged();
   return (
     <div className="space-y-6">
+      {bahanLocked && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-xs text-amber-900">
+          <b>Data bahan diatur dari pusat (timetable.iprime.web.id → Bahan).</b> Tambah bahan, satuan &amp; stok minimum
+          diubah di sana. Stok (tambah/kurangi/opname) tetap dicatat di sini.
+        </div>
+      )}
       {/* Top Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-3">

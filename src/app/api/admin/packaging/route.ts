@@ -3,8 +3,10 @@ import { prisma } from "@/lib/db";
 import { syncCatalogToSheet, syncOpsToSheet } from "@/lib/gsheet";
 import { getSession } from "@/lib/auth";
 import { autoBuyFactor } from "@/lib/units";
+import { BAHAN_LOCKED_MSG, bahanManaged } from "@/lib/menu-sync";
 
 export async function POST(req: Request) {
+  if (await bahanManaged()) return NextResponse.json({ error: BAHAN_LOCKED_MSG }, { status: 423 });
   const b = await req.json().catch(() => ({}));
   if (!b.name) return NextResponse.json({ error: "Nama wajib" }, { status: 400 });
   try {
@@ -70,6 +72,7 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  if (await bahanManaged()) return NextResponse.json({ error: BAHAN_LOCKED_MSG }, { status: 423 });
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id wajib" }, { status: 400 });
   // Relasi MenuStock ikut terhapus otomatis (onDelete: Cascade).
@@ -81,6 +84,7 @@ export async function DELETE(req: Request) {
 
 // Edit bahan: satuan dasar, satuan beli + faktor konversi, min stok, nama.
 export async function PUT(req: Request) {
+  if (await bahanManaged()) return NextResponse.json({ error: BAHAN_LOCKED_MSG }, { status: 423 });
   const b = await req.json().catch(() => ({}));
   if (!b.id) return NextResponse.json({ error: "id wajib" }, { status: 400 });
   const data: any = {};

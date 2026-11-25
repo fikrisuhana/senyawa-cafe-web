@@ -5,6 +5,7 @@ import { getSettings } from "@/lib/settings";
 import { businessDateKey } from "@/lib/bizday";
 import { syncOpsToSheet, uploadNotaToDrive } from "@/lib/gsheet";
 import { autoBuyFactor } from "@/lib/units";
+import { BAHAN_LOCKED_MSG, bahanManaged } from "@/lib/menu-sync";
 
 const NOTA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"];
 const NOTA_MAX = 8 * 1024 * 1024; // 8MB
@@ -71,6 +72,9 @@ export async function POST(req: Request) {
     notaUrl = String(b.reuseNotaUrl).slice(0, 500);
     notaName = b.reuseNotaName ? String(b.reuseNotaName).slice(0, 150) : "nota";
   }
+
+  // Bahan BARU cuma boleh dibuat di pusat kalau data bahan diatur timetable.
+  if (b.newBahan && (await bahanManaged())) return NextResponse.json({ error: BAHAN_LOCKED_MSG }, { status: 423 });
 
   const settings = await getSettings();
   const businessDate = businessDateKey(new Date(), settings.dayCutoffHour);

@@ -22,6 +22,7 @@ import {
   RotateCcw,
   ShoppingBag,
   Smartphone,
+  Download,
 } from "lucide-react";
 
 type LinkItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
@@ -57,6 +58,7 @@ const adminManage: LinkItem[] = [
 const adminSystem: LinkItem[] = [
   { href: "/admin/users", label: "Pengguna", icon: Users },
   { href: "/admin/perangkat", label: "Perangkat", icon: Smartphone },
+  { href: "/admin/aplikasi", label: "Aplikasi HP", icon: Download },
   { href: "/admin/pengaturan", label: "Pengaturan", icon: Settings },
 ];
 
@@ -110,7 +112,7 @@ export default function Nav({
   }
 
   const Brand = (
-    <div className="flex items-center space-x-3 px-6">
+    <div className="flex w-full min-w-0 items-center gap-3 overflow-hidden px-6">
       <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-sm font-bold shrink-0 overflow-hidden">
         {logoImage ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -119,12 +121,10 @@ export default function Nav({
           <Coffee className="w-4 h-4" />
         )}
       </div>
-      <div className="min-w-0">
-        <span className="font-bold text-slate-900 text-base tracking-tight leading-tight block truncate">
+      <div className="min-w-0 flex-1">
+        {/* Nama toko panjang (mis. "Ruang Senyawa Kaligondang") dibungkus maks 2 baris, gak nabrak header. */}
+        <span className="font-bold text-slate-900 text-[15px] tracking-tight leading-snug line-clamp-2 break-words">
           {storeName}
-        </span>
-        <span className="text-[11px] text-slate-400 font-medium block">
-          {isAdmin ? "POS & Management" : user.role === "BELANJA" ? "Belanja & Stok" : "Kasir Operasional"}
         </span>
       </div>
     </div>
@@ -265,9 +265,7 @@ export default function Nav({
         {/* Desktop Sticky Header */}
         <header className="no-print hidden lg:flex h-16 bg-white border-b border-slate-200 px-8 items-center justify-between sticky top-0 z-10">
           <div className="flex items-center space-x-2 text-xs text-slate-500">
-            <span className="font-bold text-slate-800 text-sm">{storeName}</span>
-            <span>/</span>
-            <span className="font-medium text-slate-800">{currentLink.label}</span>
+            <span className="font-semibold text-slate-800 text-sm">{currentLink.label}</span>
           </div>
 
           <div className="flex items-center space-x-4">

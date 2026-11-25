@@ -52,7 +52,6 @@ export default function LoginForm({
             )}
           </div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight">Login ke {storeName}</h2>
-          <p className="text-xs text-slate-500">Aplikasi Kasir POS & Manajemen Operasional</p>
         </div>
 
         <form onSubmit={submit} className="space-y-4 text-xs sm:text-sm">
@@ -101,11 +100,6 @@ export default function LoginForm({
           </button>
         </form>
 
-        <div className="pt-2 border-t border-slate-100 text-center">
-          <p className="text-[11px] text-slate-400">
-            Sistem POS Modern · Clean Dashboard & Telemetry Style
-          </p>
-        </div>
       </div>
     </main>
   );

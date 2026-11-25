@@ -307,3 +307,17 @@ model PaymentIntent {
 
   @@index([status, amount])
 }
+
+/// APK aplikasi HP yang diterbitkan admin → HP cek & update sendiri dari web
+/// (GET /api/app/version, unduh /api/app/download/<versionCode>). File di APK_DIR.
+model AppRelease {
+  id          String   @id @default(cuid())
+  versionCode Int      @unique
+  versionName String
+  notes       String   @default("")
+  size        Int
+  sha256      String
+  fileName    String
+  createdBy   String?
+  createdAt   DateTime @default(now())
+}

@@ -12,6 +12,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/integrations/") || // dikunci X-Integration-Key di route-nya
+    pathname.startsWith("/api/app/") || // cek versi & unduh APK aplikasi HP (publik)
     pathname === "/favicon.ico" ||
     pathname === "/icon.svg" ||
     pathname === "/manifest.webmanifest"

@@ -36,6 +36,9 @@ services:
       INTEGRATION_KEY: "${INTEGRATION_KEY:-}"
       NODE_ENV: production
       TZ: Asia/Jakarta
+    volumes:
+      # APK aplikasi HP yang diterbitkan di /admin/aplikasi (HP update sendiri dari sini).
+      - apkdata:/app/data/apk
     depends_on:
       db:
         condition: service_healthy
@@ -46,3 +49,4 @@ services:
 
 volumes:
   dbdata:
+  apkdata:

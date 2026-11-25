@@ -1,0 +1,54 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { integrationAuth } from "@/lib/integration";
+import { syncCatalogToSheet } from "@/lib/gsheet";
+import { MANAGED_KEY, applyMenu, cleanMenu, exportItem, loadMenu, menuManaged, type PackagingIn } from "@/lib/menu-sync";
+
+/**
+ * Menu INDUK dari aplikasi timetable (X-Integration-Key, sama dgn /api/integrations/jadwal).
+ * GET    → menu outlet ini (nama-based) + daftar bahan/kemasan + status kunci.
+ * PUT    { items, packagings } → terapkan menu induk; menu di web kasir jadi TERKUNCI.
+ * DELETE → lepas kunci (menu bisa diedit lagi di web kasir).
+ */
+export async function GET(req: Request) {
+  const auth = integrationAuth(req);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const [items, packs, managed] = await Promise.all([
+    loadMenu(),
+    prisma.packaging.findMany({ orderBy: { name: "asc" }, select: { name: true, unit: true, buyUnit: true, buyFactor: true } }),
+    menuManaged(),
+  ]);
+  return NextResponse.json({ ok: true, managed, items: items.map(exportItem), packagings: packs });
+}
+
+export async function PUT(req: Request) {
+  const auth = integrationAuth(req);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const b = await req.json().catch(() => null);
+  let items;
+  try {
+    items = cleanMenu(b?.items);
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+  }
+  // Pengaman: kiriman kosong (bug/timetable belum import) jangan sampai menonaktifkan semua menu.
+  if (items.length === 0) return NextResponse.json({ error: "Menu kosong — ditolak" }, { status: 400 });
+  const packagings: PackagingIn[] = Array.isArray(b?.packagings)
+    ? b.packagings.map((p: Record<string, unknown>) => ({
+        name: String(p?.name || "").trim(),
+        unit: String(p?.unit || "pcs"),
+        buyUnit: p?.buyUnit ? String(p.buyUnit) : null,
+        buyFactor: Number(p?.buyFactor) || 1,
+      }))
+    : [];
+  const stats = await applyMenu(items, packagings);
+  if (stats.created || stats.updated || stats.deactivated) void syncCatalogToSheet();
+  return NextResponse.json({ ok: true, ...stats });
+}
+
+export async function DELETE(req: Request) {
+  const auth = integrationAuth(req);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  await prisma.setting.deleteMany({ where: { key: MANAGED_KEY } });
+  return NextResponse.json({ ok: true });
+}

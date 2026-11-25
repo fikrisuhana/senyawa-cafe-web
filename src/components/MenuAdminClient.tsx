@@ -48,9 +48,12 @@ const EMPTY = {
 export default function MenuAdminClient({
   rows,
   packs,
+  locked = false,
 }: {
   rows: MenuRow[];
   packs: PackOption[];
+  /** Menu diatur dari aplikasi timetable (pusat) → di sini cuma lihat. */
+  locked?: boolean;
 }) {
   const router = useRouter();
   const [form, setForm] = useState<any>(EMPTY);
@@ -142,8 +145,15 @@ export default function MenuAdminClient({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
+    <div className={locked ? "space-y-4" : "grid gap-6 lg:grid-cols-[380px_1fr]"}>
+      {locked && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-xs text-amber-900">
+          <b>Menu diatur dari pusat (timetable.iprime.web.id → Menu).</b> Di sini cuma bisa dilihat; tambah/ubah
+          menu, harga, resep &amp; varian lewat aplikasi timetable, nanti otomatis terkirim ke kasir ini.
+        </div>
+      )}
       {/* Form Input Menu */}
+      {!locked && (
       <form onSubmit={save} className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 h-fit text-xs">
         <div className="border-b border-slate-100 pb-3">
           <h3 className="font-bold text-slate-900 text-sm">
@@ -305,6 +315,7 @@ export default function MenuAdminClient({
           )}
         </div>
       </form>
+      )}
 
       {/* Tabel Daftar Menu (ala app-monitoring) */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm space-y-0 h-fit">
@@ -343,14 +354,21 @@ export default function MenuAdminClient({
                       : <span className="text-slate-400">—</span>}
                   </td>
                   <td className="py-3 px-4">
+                    {locked ? (
+                      <span className={r.active ? "pill-green" : "pill-slate"}>{r.active ? "Aktif" : "Nonaktif"}</span>
+                    ) : (
                     <button
                       onClick={() => toggle(r)}
                       className={r.active ? "pill-green cursor-pointer" : "pill-slate cursor-pointer"}
                     >
                       {r.active ? "Aktif" : "Nonaktif"}
                     </button>
+                    )}
                   </td>
                   <td className="py-3 px-4 text-right whitespace-nowrap">
+                    {locked ? (
+                      <span className="text-slate-400">{r.groups.length ? `${r.groups.length} grup varian` : "—"}</span>
+                    ) : (
                     <div className="inline-flex items-center gap-1.5">
                       <button
                         onClick={() => setVariantMenuId(r.id)}
@@ -374,6 +392,7 @@ export default function MenuAdminClient({
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -389,7 +408,7 @@ export default function MenuAdminClient({
         </div>
       </div>
 
-      {variantMenu && (
+      {variantMenu && !locked && (
         <VariantEditor menu={variantMenu} packs={packs} onClose={() => setVariantMenuId(null)} />
       )}
     </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { syncCatalogToSheet } from "@/lib/gsheet";
+import { LOCKED_MSG, menuManaged } from "@/lib/menu-sync";
 
 type StockIn = { packagingId: string; qty: number };
 
@@ -18,6 +19,7 @@ function cleanStocks(raw: any): StockIn[] {
 }
 
 export async function POST(req: Request) {
+  if (await menuManaged()) return NextResponse.json({ error: LOCKED_MSG }, { status: 423 });
   const b = await req.json().catch(() => ({}));
   if (!b.name) return NextResponse.json({ error: "Nama wajib" }, { status: 400 });
   const stocks = cleanStocks(b.stocks);
@@ -44,6 +46,7 @@ export async function POST(req: Request) {
 }
 
 export async function PUT(req: Request) {
+  if (await menuManaged()) return NextResponse.json({ error: LOCKED_MSG }, { status: 423 });
   const b = await req.json().catch(() => ({}));
   if (!b.id) return NextResponse.json({ error: "id wajib" }, { status: 400 });
   const stocks = cleanStocks(b.stocks);
@@ -76,6 +79,7 @@ export async function PUT(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  if (await menuManaged()) return NextResponse.json({ error: LOCKED_MSG }, { status: 423 });
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id wajib" }, { status: 400 });
   await prisma.menuItem.delete({ where: { id } });

@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/db";
 import MenuAdminClient, { type MenuRow, type PackOption } from "@/components/MenuAdminClient";
 import { Utensils } from "lucide-react";
+import { menuManaged } from "@/lib/menu-sync";
 
 export const dynamic = "force-dynamic";
 
 export default async function MenuAdminPage() {
-  const [items, packs] = await Promise.all([
+  const [items, packs, locked] = await Promise.all([
     prisma.menuItem.findMany({
       include: {
         stocks: { include: { packaging: true } },
@@ -16,6 +17,7 @@ export default async function MenuAdminPage() {
       orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
     }),
     prisma.packaging.findMany({ orderBy: { name: "asc" } }),
+    menuManaged(),
   ]);
 
   const rows: MenuRow[] = items.map((m) => ({
@@ -66,7 +68,7 @@ export default async function MenuAdminPage() {
           <p className="text-xs text-slate-500">Kelola katalog menu makanan/minuman, resep bahan baku kemasan, dan konfigurasi varian</p>
         </div>
       </div>
-      <MenuAdminClient rows={rows} packs={packOptions} />
+      <MenuAdminClient rows={rows} packs={packOptions} locked={locked} />
     </div>
   );
 }

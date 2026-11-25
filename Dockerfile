@@ -1,7 +1,7 @@
 # --- Single-stage image, cukup simpel untuk MVP ---
 FROM node:20-alpine
 # tzdata WAJIB — tanpa ini env TZ diabaikan (container tetap UTC, tanggal mundur).
-RUN apk add --no-cache libc6-compat openssl tzdata
+RUN apk add --no-cache libc6-compat openssl tzdata postgresql16-client
 WORKDIR /app
 
 COPY package*.json ./

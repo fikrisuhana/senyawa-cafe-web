@@ -321,3 +321,27 @@ model AppRelease {
   createdBy   String?
   createdAt   DateTime @default(now())
 }
+
+/// TUTUP KASIR: hitung uang laci di akhir shift → selisih vs seharusnya.
+/// Seharusnya = kas awal (setelan laci) + penjualan TUNAI + kas masuk − kas keluar
+/// SEJAK tutup kasir sebelumnya di hari usaha yang sama (atau awal hari).
+model CashClosing {
+  id           String   @id @default(cuid())
+  businessDate String
+  shift        String?
+  cashierName  String
+  since        DateTime // awal periode yang dihitung
+  kasAwal      Int
+  cashSales    Int
+  cashIn       Int
+  cashOut      Int
+  expected     Int
+  counted      Int
+  diff         Int // counted − expected (minus = kurang)
+  trxCount     Int      @default(0)
+  note         String?
+  clientId     String?  @unique // anti dobel dari HP
+  createdAt    DateTime @default(now())
+
+  @@index([businessDate])
+}

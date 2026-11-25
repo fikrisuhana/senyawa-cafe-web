@@ -22,6 +22,7 @@ import {
   RotateCcw,
   ShoppingBag,
   Smartphone,
+  Vault,
   Download,
 } from "lucide-react";
 
@@ -30,6 +31,7 @@ type LinkItem = { href: string; label: string; icon: React.ComponentType<{ class
 const kasirLinks: LinkItem[] = [
   { href: "/kasir", label: "Kasir", icon: Receipt },
   { href: "/rekap", label: "Rekap", icon: BarChart3 },
+  { href: "/tutup-kasir", label: "Tutup Kasir", icon: Vault },
   { href: "/absen", label: "Absen", icon: Clock },
 ];
 
@@ -43,6 +45,7 @@ const adminMain: LinkItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutGrid },
   { href: "/kasir", label: "Kasir", icon: Receipt },
   { href: "/rekap", label: "Rekap", icon: BarChart3 },
+  { href: "/tutup-kasir", label: "Tutup Kasir", icon: Vault },
   { href: "/absen", label: "Absen", icon: Clock },
 ];
 

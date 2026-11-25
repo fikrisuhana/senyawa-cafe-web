@@ -59,7 +59,7 @@ export async function GET(req: Request) {
   if (!DATE_RE.test(from) || !DATE_RE.test(to)) return NextResponse.json({ error: "from/to wajib YYYY-MM-DD" }, { status: 400 });
   const bd = { gte: from, lte: to };
 
-  const [txs, voids, entries, purchases, packs, settings] = await Promise.all([
+  const [txs, voids, entries, purchases, packs, settings, closings] = await Promise.all([
     prisma.transaction.findMany({
       where: { businessDate: bd, status: { not: "VOID" } },
       select: {
@@ -78,6 +78,7 @@ export async function GET(req: Request) {
     prisma.purchase.findMany({ where: { businessDate: bd }, select: { businessDate: true, category: true, total: true } }),
     prisma.packaging.findMany({ select: { name: true, unit: true, stock: true, minStock: true }, orderBy: { name: "asc" } }),
     getSettings(),
+    prisma.cashClosing.findMany({ where: { businessDate: bd }, orderBy: { createdAt: "asc" } }),
   ]);
 
   const days = new Map<string, Day>();
@@ -124,5 +125,21 @@ export async function GET(req: Request) {
     items: [...items.values()].sort((a, b) => b.qty - a.qty),
     categories: [...cats.values()].sort((a, b) => b.omzet - a.omzet),
     stock: packs,
+    closings: closings.map((c) => ({
+      id: c.id,
+      businessDate: c.businessDate,
+      shift: c.shift,
+      cashierName: c.cashierName,
+      kasAwal: c.kasAwal,
+      cashSales: c.cashSales,
+      cashIn: c.cashIn,
+      cashOut: c.cashOut,
+      expected: c.expected,
+      counted: c.counted,
+      diff: c.diff,
+      trxCount: c.trxCount,
+      note: c.note,
+      createdAt: c.createdAt.toISOString(),
+    })),
   });
 }

@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { prisma } from "@/lib/db";
 import { syncCatalogToSheet, syncOpsToSheet } from "@/lib/gsheet";
 import { getSession } from "@/lib/auth";
+import { bahanManaged } from "@/lib/menu-sync";
 
 // GET: unduh template Excel (nama, satuan, stok, stok_min)
 export async function GET() {
@@ -58,6 +59,8 @@ export async function POST(req: Request) {
   let created = 0;
   let updated = 0;
   const errors: string[] = [];
+  // Data bahan diatur pusat → Excel cuma buat OPNAME stok (satuan/min stok/bahan baru dari timetable).
+  const managed = await bahanManaged();
 
   for (const r of rows) {
     const name = String(pick(r, ["nama", "name"]) ?? "").trim();
@@ -74,7 +77,7 @@ export async function POST(req: Request) {
         await prisma.$transaction([
           prisma.packaging.update({
             where: { id: existing.id },
-            data: { unit, stock, minStock },
+            data: managed ? { stock } : { unit, stock, minStock },
           }),
           prisma.stockMovement.create({
             data: {
@@ -89,6 +92,8 @@ export async function POST(req: Request) {
           }),
         ]);
         updated++;
+      } else if (managed) {
+        errors.push(`${name} (bahan baru ditambah di timetable)`);
       } else {
         const p = await prisma.packaging.create({
           data: { name, unit, stock, minStock },

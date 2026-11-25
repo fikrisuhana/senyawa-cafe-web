@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import VoucherClient, { type VoucherRow } from "@/components/VoucherClient";
 import { TicketPercent } from "lucide-react";
+import { voucherManaged } from "@/lib/menu-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ function ymd(d: Date | null): string {
 
 export default async function VoucherPage() {
   const vouchers = await prisma.voucher.findMany({ orderBy: { createdAt: "asc" } });
+  const locked = await voucherManaged();
   const rows: VoucherRow[] = vouchers.map((v) => ({
     id: v.id,
     name: v.name,
@@ -37,7 +39,14 @@ export default async function VoucherPage() {
           </p>
         </div>
       </div>
-      <VoucherClient rows={rows} />
+      {locked && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-xs text-amber-900">
+          <b>Voucher diatur dari pusat (timetable.iprime.web.id → Voucher).</b> Di sini cuma bisa dilihat; kasir tetap bisa memakai voucher saat transaksi.
+        </div>
+      )}
+      <div className={locked ? "pointer-events-none select-none opacity-70" : ""}>
+        <VoucherClient rows={rows} />
+      </div>
     </div>
   );
 }

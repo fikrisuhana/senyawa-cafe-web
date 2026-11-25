@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { syncCatalogToSheet } from "@/lib/gsheet";
+import { VOUCHER_LOCKED_MSG, voucherManaged } from "@/lib/menu-sync";
 
 function norm(b: any) {
   const type = b.type === "NOMINAL" ? "NOMINAL" : "PERCENT";
@@ -27,6 +28,7 @@ function limits(b: any) {
 }
 
 export async function POST(req: Request) {
+  if (await voucherManaged()) return NextResponse.json({ error: VOUCHER_LOCKED_MSG }, { status: 423 });
   const b = await req.json().catch(() => ({}));
   if (!b.name) return NextResponse.json({ error: "Nama wajib" }, { status: 400 });
   const { type, value } = norm(b);
@@ -44,6 +46,7 @@ export async function POST(req: Request) {
 }
 
 export async function PUT(req: Request) {
+  if (await voucherManaged()) return NextResponse.json({ error: VOUCHER_LOCKED_MSG }, { status: 423 });
   const b = await req.json().catch(() => ({}));
   if (!b.id) return NextResponse.json({ error: "id wajib" }, { status: 400 });
   const data: any = {};
@@ -57,6 +60,7 @@ export async function PUT(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  if (await voucherManaged()) return NextResponse.json({ error: VOUCHER_LOCKED_MSG }, { status: 423 });
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id wajib" }, { status: 400 });
   await prisma.voucher.delete({ where: { id } });

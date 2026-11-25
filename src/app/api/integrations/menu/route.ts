@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { integrationAuth } from "@/lib/integration";
 import { syncCatalogToSheet } from "@/lib/gsheet";
-import { BAHAN_KEY, MANAGED_KEY, applyMenu, cleanMenu, exportItem, loadMenu, menuManaged, type PackagingIn } from "@/lib/menu-sync";
+import { BAHAN_KEY, MANAGED_KEY, VOUCHER_KEY, applyVouchers, cleanVouchers, exportVouchers, applyMenu, cleanMenu, exportItem, loadMenu, menuManaged, type PackagingIn } from "@/lib/menu-sync";
 
 /**
  * Menu INDUK dari aplikasi timetable (X-Integration-Key, sama dgn /api/integrations/jadwal).
@@ -15,12 +15,13 @@ import { BAHAN_KEY, MANAGED_KEY, applyMenu, cleanMenu, exportItem, loadMenu, men
 export async function GET(req: Request) {
   const auth = integrationAuth(req);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  const [items, packs, managed] = await Promise.all([
+  const [items, packs, managed, vouchers] = await Promise.all([
     loadMenu(),
     prisma.packaging.findMany({ orderBy: { name: "asc" }, select: { name: true, unit: true, buyUnit: true, buyFactor: true, stock: true, minStock: true } }),
     menuManaged(),
+    exportVouchers(),
   ]);
-  return NextResponse.json({ ok: true, managed, items: items.map(exportItem), packagings: packs });
+  return NextResponse.json({ ok: true, managed, items: items.map(exportItem), packagings: packs, vouchers });
 }
 
 export async function PUT(req: Request) {
@@ -49,13 +50,15 @@ export async function PUT(req: Request) {
     : [];
   const dryRun = b?.dryRun === true;
   const stats = await applyMenu(items, packagings, { dryRun, renames });
+  // vouchers ada di kiriman (boleh kosong) = voucher diatur pusat.
+  const vStats = Array.isArray(b?.vouchers) ? await applyVouchers(cleanVouchers(b.vouchers), { dryRun }) : null;
   if (!dryRun && stats.created || stats.updated || stats.deactivated) void syncCatalogToSheet();
-  return NextResponse.json({ ok: true, dryRun, ...stats });
+  return NextResponse.json({ ok: true, dryRun, ...stats, ...(vStats || {}) });
 }
 
 export async function DELETE(req: Request) {
   const auth = integrationAuth(req);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  await prisma.setting.deleteMany({ where: { key: { in: [MANAGED_KEY, BAHAN_KEY] } } });
+  await prisma.setting.deleteMany({ where: { key: { in: [MANAGED_KEY, BAHAN_KEY, VOUCHER_KEY] } } });
   return NextResponse.json({ ok: true });
 }

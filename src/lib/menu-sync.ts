@@ -26,6 +26,111 @@ export type RenameIn = { from: string; to: string };
 
 export const MANAGED_KEY = "menuManagedBy";
 export const BAHAN_KEY = "bahanManagedBy";
+export const VOUCHER_KEY = "voucherManagedBy";
+
+/** Voucher outlet ini diatur dari timetable? */
+export async function voucherManaged(): Promise<boolean> {
+  const s = await prisma.setting.findUnique({ where: { key: VOUCHER_KEY } });
+  return !!s?.value;
+}
+export const VOUCHER_LOCKED_MSG = "Voucher diatur dari aplikasi timetable (pusat) — buat/ubah voucher di sana.";
+
+export type VoucherIn = {
+  name: string;
+  type: "PERCENT" | "NOMINAL";
+  value: number;
+  active: boolean;
+  maxUses: number | null;
+  validFrom: string | null; // YYYY-MM-DD
+  validUntil: string | null;
+};
+
+export function cleanVouchers(raw: unknown): VoucherIn[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: VoucherIn[] = [];
+  const day = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+  for (const r of raw as Record<string, unknown>[]) {
+    const name = String(r?.name ?? "").trim().slice(0, 60);
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    const type = r.type === "NOMINAL" ? "NOMINAL" : "PERCENT";
+    let value = Math.round(Number(r.value) || 0);
+    value = type === "PERCENT" ? Math.min(100, Math.max(0, value)) : Math.max(0, value);
+    const mu = Number(r.maxUses);
+    out.push({
+      name,
+      type,
+      value,
+      active: r.active !== false,
+      maxUses: Number.isFinite(mu) && mu > 0 ? Math.round(mu) : null,
+      validFrom: day(r.validFrom),
+      validUntil: day(r.validUntil),
+    });
+  }
+  return out;
+}
+
+const dayOf = (d: Date | null) =>
+  d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null;
+
+/**
+ * Terapkan voucher pusat (cocok lewat NAMA). Pemakaian (usedCount) tetap milik outlet.
+ * Voucher lokal yang tak ada di pusat → dinonaktifkan (riwayat transaksi aman).
+ */
+export async function applyVouchers(list: VoucherIn[], opts: { dryRun?: boolean } = {}) {
+  const stats = { voucherCreated: 0, voucherUpdated: 0, voucherDeactivated: 0 };
+  const cur = await prisma.voucher.findMany();
+  const byName = new Map(cur.map((v) => [v.name, v]));
+  const want = new Set(list.map((v) => v.name));
+  const writes: (() => Promise<unknown>)[] = [];
+  for (const v of list) {
+    const data = {
+      type: v.type,
+      value: v.value,
+      active: v.active,
+      maxUses: v.maxUses,
+      validFrom: v.validFrom ? new Date(v.validFrom + "T00:00:00") : null,
+      validUntil: v.validUntil ? new Date(v.validUntil + "T23:59:59") : null,
+    };
+    const c = byName.get(v.name);
+    if (!c) {
+      stats.voucherCreated++;
+      writes.push(() => prisma.voucher.create({ data: { name: v.name, ...data } }));
+    } else if (
+      c.type !== v.type ||
+      c.value !== v.value ||
+      c.active !== v.active ||
+      (c.maxUses ?? null) !== v.maxUses ||
+      dayOf(c.validFrom) !== v.validFrom ||
+      dayOf(c.validUntil) !== v.validUntil
+    ) {
+      stats.voucherUpdated++;
+      writes.push(() => prisma.voucher.update({ where: { id: c.id }, data }));
+    }
+  }
+  const extra = cur.filter((c) => !want.has(c.name) && c.active).map((c) => c.id);
+  stats.voucherDeactivated = extra.length;
+  if (opts.dryRun) return stats;
+  for (const w of writes) await w();
+  if (extra.length) await prisma.voucher.updateMany({ where: { id: { in: extra } }, data: { active: false } });
+  await prisma.setting.upsert({ where: { key: VOUCHER_KEY }, create: { key: VOUCHER_KEY, value: "timetable" }, update: { value: "timetable" } });
+  return stats;
+}
+
+export async function exportVouchers() {
+  const rows = await prisma.voucher.findMany({ orderBy: { name: "asc" } });
+  return rows.map((v) => ({
+    name: v.name,
+    type: v.type,
+    value: v.value,
+    active: v.active,
+    maxUses: v.maxUses,
+    usedCount: v.usedCount,
+    validFrom: dayOf(v.validFrom),
+    validUntil: dayOf(v.validUntil),
+  }));
+}
 
 /** Data bahan outlet ini dikunci (diatur dari timetable)? Stok tetap boleh diubah di kasir. */
 export async function bahanManaged(): Promise<boolean> {
